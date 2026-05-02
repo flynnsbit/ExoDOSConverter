@@ -30,6 +30,7 @@ class ExoGUI:
         # TODO create conf file from guiStrings if it doesn't exist and do not ship it with tool anymore 
         self.configuration = conf.loadConf(
             os.path.join(self.scriptDir, util.confDir, util.getConfFilename(self.setKey)))
+        self.configuration = util.normalizeConfiguredPaths(self.configuration)
         self.guiVars = dict()
         self.guiStrings = util.loadUIStrings(self.scriptDir, util.getGuiStringsFilename(self.setKey))
         self.fullnameToGameDir = None
@@ -147,8 +148,7 @@ class ExoGUI:
                                                 title="Select your " + self.guiStrings[var].label,
                                                 filetypes=[('Selection Files', '*.%s' % fileType)])
         if result != '':
-            if platform.system() == 'Windows':
-                result = result.replace('/', '\\')
+            result = util.normalizeHostPath(result)
             self.__updateConsoleFromQueue__()
             self.guiVars[var].set(result)
             if not openDir and var == 'selectionPath':
@@ -453,7 +453,19 @@ class ExoGUI:
     # Listener for collection path modifications
     def __handleCollectionFolder__(self, *args):
         collectionDir = self.guiVars['collectionDir'].get()
-        collectionVersion = util.validCollectionPath(collectionDir)
+        normalizedCollectionDir = util.normalizeHostPath(collectionDir)
+        if normalizedCollectionDir != collectionDir:
+            self.guiVars['collectionDir'].set(normalizedCollectionDir)
+            return
+
+        if normalizedCollectionDir == '':
+            self.guiVars['collectionVersion'].set('None')
+            self.guiVars['collectionVersionLabel'].set(
+                self.guiStrings['collectionVersion'].label + ': ' + self.guiVars['collectionVersion'].get())
+            self.__handleComponentsState__(False)
+            return
+
+        collectionVersion = util.validCollectionPath(normalizedCollectionDir)
         self.guiVars['collectionVersion'].set(collectionVersion)
         self.guiVars['collectionVersionLabel'].set(self.guiStrings['collectionVersion'].label + ': ' + self.guiVars['collectionVersion'].get())
 
@@ -622,7 +634,9 @@ class ExoGUI:
 
     # Listener to save custom selection
     def __saveCustom__(self):
-        customSelectionFile = self.selectionPathEntry.get()
+        customSelectionFile = util.normalizeHostPath(self.selectionPathEntry.get())
+        if customSelectionFile != self.selectionPathEntry.get():
+            self.guiVars['selectionPath'].set(customSelectionFile)
         if not os.path.exists(os.path.dirname(customSelectionFile)):
             self.logger.log('Parent dir "%s" for Selection File "%s" does not exist' % (
                 os.path.dirname(customSelectionFile), customSelectionFile), self.logger.ERROR)
@@ -639,7 +653,9 @@ class ExoGUI:
 
     # Listener to load custom collection
     def __loadCustom__(self):
-        customSelectionFile = self.selectionPathEntry.get()
+        customSelectionFile = util.normalizeHostPath(self.selectionPathEntry.get())
+        if customSelectionFile != self.selectionPathEntry.get():
+            self.guiVars['selectionPath'].set(customSelectionFile)
         if not os.path.exists(customSelectionFile):
             self.logger.log('Selection File "%s" does not exist' % customSelectionFile, self.logger.ERROR)
         else:
@@ -780,7 +796,10 @@ class ExoGUI:
         self.logger.log('\n<--------- Verify ' + self.setKey + ' Parameters --------->')
         error = False
         for key in ['outputDir', 'collectionDir']:
-            if not os.path.exists(self.guiVars[key].get()):
+            normalizedPath = util.normalizeHostPath(self.guiVars[key].get())
+            if normalizedPath != self.guiVars[key].get():
+                self.guiVars[key].set(normalizedPath)
+            if not os.path.exists(normalizedPath):
                 error = True
                 self.logger.log(key + ' folder does not exist')
 
@@ -793,10 +812,14 @@ class ExoGUI:
         self.__handleComponentsState__(True)
 
         self.logger.log('\n<--------- Starting ' + self.setKey + ' Process --------->')
-        collectionDir = self.guiVars['collectionDir'].get()
+        collectionDir = util.normalizeHostPath(self.guiVars['collectionDir'].get())
+        if collectionDir != self.guiVars['collectionDir'].get():
+            self.guiVars['collectionDir'].set(collectionDir)
         conversionType = self.guiVars['conversionType'].get()
         useGenreSubFolders = True if self.guiVars['genreSubFolders'].get() == 1 else False
-        outputDir = self.guiVars['outputDir'].get()
+        outputDir = util.normalizeHostPath(self.guiVars['outputDir'].get())
+        if outputDir != self.guiVars['outputDir'].get():
+            self.guiVars['outputDir'].set(outputDir)
         # Configuration parameters
         conversionConf = dict()
         conversionConf['useDebugMode'] = True if self.guiVars['debugMode'].get() == 1 else False
@@ -809,6 +832,9 @@ class ExoGUI:
         conversionConf['outputCfg'] = self.guiVars['outputCfg'].get()
         conversionConf['vsyncCfg'] = True if self.guiVars['vsyncCfg'].get() == 1 else False
         conversionConf['preExtractGames'] = True if self.guiVars['preExtractGames'].get() == 1 else False
+        if conversionType == util.mister:
+            # MyMenu packaging always keeps game folders directly under /games.
+            conversionConf['preExtractGames'] = False
         if conversionType in [util.retrobat, util.batocera, util.recalbox]:
             useLongFolderNames = True if self.guiVars['longGameFolder'].get() == 1 else False
             conversionConf['dosboxPureZip'] = True if self.guiVars['dosboxPureZip'].get() == 1 else False
@@ -885,8 +911,7 @@ class ExoGUI:
                 [self.__setComponentState__(c, 'disabled' if self.guiVars['expertMode'].get() != 1 or self.guiVars['conversionType'].get() == util.mister else 'normal')
                  for c in dosboxExpertComponents]
                 [self.__setComponentState__(c, 'normal') for c in mainButtons + otherComponents + entryComponents]
-                self.__setComponentState__(self.preExtractGamesCheckButton,
-                                           'normal' if self.guiVars['conversionType'].get() == util.mister else 'disabled')
+                self.__setComponentState__(self.preExtractGamesCheckButton, 'disabled')
                 [self.__setComponentState__(c, 'disabled' if self.guiVars['conversionType'].get() == util.mister else 'normal') for c in
                  dosboxBasicComponents + [self.expertModeCheckButton]]
                 self.__setComponentState__(self.downloadOnDemandCheckButton, 'normal')

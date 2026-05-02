@@ -34,9 +34,9 @@ class C64Converter:
         if len(self.games) == 0:
             self.postProcess()
             return
-        if self.conversionType == util.mister and os.path.exists(os.path.join(self.outputDir, 'TDL_VHD')):
+        if self.conversionType == util.mister and util.hasMisterPack(self.outputDir):
             self.logger.log(
-                "\nFound a previous MiSTeR conversion in output folder, please move or delete it before processing with a new one\n",
+                "\nFound a previous MiSTeR pack in output folder, please move or delete it before processing with a new one\n",
                 self.logger.ERROR)
             self.postProcess()
             return

@@ -7,7 +7,7 @@ from keyb2joypad import Keyb2Joypad
 import util
 import dosboxconfv6
 from zipfile import ZipFile
-import TDLindexer
+import mymenupacker
 from gamegenerator import GameGenerator
 
 
@@ -42,8 +42,8 @@ class ExoConverter:
         if len(self.games) == 0:
             self.postProcess()
             return
-        if self.conversionType == util.mister and os.path.exists(os.path.join(self.outputDir, 'TDL_VHD')):
-            self.logger.log("\nFound a previous MiSTeR conversion in output folder, please move or delete it before processing with a new one\n", self.logger.ERROR)
+        if self.conversionType == util.mister and util.hasMisterPack(self.outputDir):
+            self.logger.log("\nFound a previous MiSTeR pack in output folder, please move or delete it before processing with a new one\n", self.logger.ERROR)
             self.postProcess()
             return
 
@@ -217,46 +217,34 @@ class ExoConverter:
                 # delete empty genres dir
                 dirs = [file for file in os.listdir(self.outputDir) if
                         os.path.isdir(os.path.join(self.outputDir, file))
-                        and file not in ['games', 'games-data', 'cd', 'floppy', 'manuals', 'bootdisk']]
+                        and file not in ['games', 'cd', 'floppy', 'manuals', 'bootdisk', 'ao486', 'mymenu']]
                 gamesDir = os.path.join(self.outputDir, 'games')
                 if os.path.exists(gamesDir):
                     for genreDir in dirs:
                         shutil.rmtree(os.path.join(self.outputDir, genreDir))
-                    # copy mister zips
-                    shutil.copy2(os.path.join(self.scriptDir, 'data', 'mister', '(Manually Added Games).zip'), gamesDir)
-                    shutil.copy2(os.path.join(self.scriptDir, 'data', 'mister', '(Utilities and System Files).zip'),
-                                 gamesDir)
-                    # Call Total DOS Launcher Indexer, delete top level games folder after
-                    self.logger.log('Total DOS Indexer for ' + self.conversionType)
-                    TDLindexer.index(self.outputDir, self.scriptDir, util.misterCleanNameToGameDir,
-                                     self.conversionConf['useDebugMode'],
-                                     self.conversionConf['preExtractGames'], self.logger)
-                    os.rename(os.path.join(self.outputDir, 'tdlprocessed'), os.path.join(self.outputDir, 'TDL_VHD'))
-                    if not self.conversionConf['useDebugMode'] or self.conversionConf['preExtractGames']:
-                        shutil.rmtree(os.path.join(self.outputDir, 'games'))
+                    mymenupacker.copySupportZips(gamesDir, self.scriptDir, self.logger)
+                    self.logger.log('Assembling MyMenu frontend for ' + self.conversionType)
+                    if not mymenupacker.extractFrontend(self.outputDir, self.scriptDir, self.logger):
+                        self.logger.log('  Failed to assemble MyMenu frontend payload', self.logger.ERROR)
                     # move cd, floppy, boot disk into ao486 folder
                     if not os.path.exists(os.path.join(self.outputDir, "ao486")):
                         os.mkdir(os.path.join(self.outputDir, "ao486"))
-                    self.logger.log("  Moving cd folder to tdlprocessed, this might take a while ...")
+                    self.logger.log("  Moving cd folder to ao486, this might take a while ...")
                     if os.path.exists(os.path.join(self.outputDir, "cd")):
                         shutil.move(os.path.join(self.outputDir, "cd"),
                                     os.path.join(os.path.join(self.outputDir, "ao486")))
-                    self.logger.log("  Moving floppy folder to tdlprocessed, this might take a while ...")
+                    self.logger.log("  Moving floppy folder to ao486, this might take a while ...")
                     if os.path.exists(os.path.join(self.outputDir, "floppy")):
                         shutil.move(os.path.join(self.outputDir, "floppy"),
                                     os.path.join(os.path.join(self.outputDir, "ao486")))
-                    self.logger.log("  Moving bootdisk folder to tdlprocessed, this might take a while ...")
+                    self.logger.log("  Moving bootdisk folder to ao486, this might take a while ...")
                     if os.path.exists(os.path.join(self.outputDir, "bootdisk")):
                         shutil.move(os.path.join(self.outputDir, "bootdisk"),
                                     os.path.join(os.path.join(self.outputDir, "ao486")))
                 else:
                     self.logger.log(
-                        '  Some critical errors seems to have happened during process.\n  Skipping Total Indexer phase',
+                        '  Some critical errors seems to have happened during process.\n  Skipping MyMenu assembly phase',
                         self.logger.ERROR)
-                # clean data/distro dir if it exists
-                distroUnzippedDir = os.path.join(self.scriptDir, 'data', 'mister', 'distro')
-                if os.path.exists(distroUnzippedDir) and os.path.isdir(distroUnzippedDir):
-                    shutil.rmtree(distroUnzippedDir)
 
         elif self.conversionType == util.emuelec:
             self.logger.log('Post cleaning for ' + self.conversionType)

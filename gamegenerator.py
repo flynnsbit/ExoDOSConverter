@@ -302,42 +302,22 @@ class GameGenerator:
             os.remove(os.path.join(self.getLocalGameOutputDir(),
                                    '5_About' + os.path.splitext(self.metadata.frontPic)[-1]))
 
-        misterCleanName = util.getCleanGameID(self.metadata, '').replace('+', '').replace("'", '').replace('µ',
-                                                                                                           'mu') \
-            .replace('¿', '').replace('é', 'e').replace('á', '').replace('ō', 'o').replace('#', '').replace('½', '') \
-            .replace('$', '').replace('à', 'a').replace('&', 'and').replace(',', '')
-
-        util.misterCleanNameToGameDir[misterCleanName] = self.game
-
         if not os.path.exists(os.path.join(self.outputDir, 'games')):
             os.mkdir(os.path.join(self.outputDir, 'games'))
 
-        if self.conversionConf['preExtractGames']:
-            # As the game will be pre-extracted, create empty zip, only containing a warning missing.bat file
-            warningBat = open(os.path.join(self.outputDir, 'games', 'missing.bat'), 'w')
-            warningBat.write('@echo off\nECHO You have used a pre-extracted games pack but the game data '
-                             'files in your games directory are missing or corrupted .\n'
-                             'Please regenerate your game data using the ExoDOSConverter,'
-                             ' drop the game folder into E:\\GAMES\\GAMENAME and re-launch the game.\n')
-            warningBat.close()
-            with ZipFile(os.path.join(self.outputDir, 'games', misterCleanName + '.zip'), 'w') as zf:
-                zf.write(os.path.join(self.outputDir, 'games', 'missing.bat'), 'missing.bat')
-            os.remove(os.path.join(self.outputDir, 'games', 'missing.bat'))
-            # Move game.pc folder to games-data
-            if not os.path.exists(os.path.join(self.outputDir, 'games-data')):
-                os.mkdir(os.path.join(self.outputDir, 'games-data'))
-            shutil.move(os.path.join(self.getLocalGameOutputDir()),
-                        os.path.join(self.outputDir, 'games-data', misterCleanName))
-        else:
-            # Zip internal game dir to longgamename.zip
-            self.logger.log('    Rezipping game to %s.zip' % misterCleanName)
-            shutil.make_archive(os.path.join(self.getLocalParentOutputDir(), misterCleanName), 'zip',
-                                self.getLocalGameOutputDir())
-            # Delete everything unrelated
-            shutil.rmtree(os.path.join(self.getLocalGameOutputDir()))
-            # Move archive to games folder
-            shutil.move(os.path.join(self.getLocalParentOutputDir(), misterCleanName + '.zip'),
-                        os.path.join(self.outputDir, 'games'))
+        gameFolderName = util.getCleanGameID(self.metadata, '')
+        targetGameOutputDir = os.path.join(self.outputDir, 'games', gameFolderName)
+
+        if os.path.exists(targetGameOutputDir):
+            self.logger.log("    <WARNING> Existing game folder %s found, replacing it" % gameFolderName, self.logger.WARNING)
+            shutil.rmtree(targetGameOutputDir)
+
+        shutil.move(os.path.join(self.getLocalGameOutputDir()), targetGameOutputDir)
+
+        autorunBat = open(os.path.join(targetGameOutputDir, 'autorun.bat'), 'w', newline='\r\n')
+        autorunBat.write('@echo off\n')
+        autorunBat.write('call 1_Start.bat\n')
+        autorunBat.close()
 
     # Post-conversion for openDingux for a given game
     def __postConversionForOpenDingux__(self):

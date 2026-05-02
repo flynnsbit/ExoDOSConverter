@@ -4,6 +4,7 @@ import os.path
 import platform
 import collections
 import shutil
+import re
 from PIL import Image
 import requests
 import urllib.request
@@ -48,8 +49,6 @@ mappersDefault = ['None', 'mapper.map']  # default choice except MiSTeR
 mappersRecalbox = ['None', 'mapper.map', 'p2k']
 
 theEyeUrl = 'https://the-eye.eu/public/Games/eXo/eXoDOS_v6r2/eXo/eXoDOS/'
-
-misterCleanNameToGameDir = dict()
 
 
 def getMapperValues(conversionType):
@@ -291,6 +290,87 @@ def localOSPath(path):
         return path.replace('\\', '/')
 
 
+def isWindowsDrivePath(path):
+    return isinstance(path, str) and re.match(r'^[A-Za-z]:[\\/]', path) is not None
+
+
+def _getLinuxMountRoots():
+    user = os.environ.get('USER', '')
+    roots = ['/mnt']
+    if user:
+        roots.extend([os.path.join('/media', user), os.path.join('/run/media', user)])
+    else:
+        roots.extend(['/media', '/run/media'])
+    return roots
+
+
+def _iterLinuxDriveCandidates(drive, relativePath):
+    for root in _getLinuxMountRoots():
+        for driveToken in [drive.lower(), drive.upper()]:
+            mountRoot = os.path.join(root, driveToken)
+            yield os.path.join(mountRoot, relativePath) if relativePath else mountRoot
+
+
+def _findLinuxPathByVolumeSuffix(relativePath):
+    if not relativePath:
+        return None
+
+    for root in _getLinuxMountRoots():
+        if not os.path.isdir(root):
+            continue
+
+        directCandidate = os.path.join(root, relativePath)
+        if os.path.exists(directCandidate):
+            return directCandidate
+
+        for entry in os.listdir(root):
+            volumeCandidate = os.path.join(root, entry, relativePath)
+            if os.path.exists(volumeCandidate):
+                return volumeCandidate
+    return None
+
+
+# Normalizes host paths across Windows/Linux/Mac and maps Windows drive paths on Linux.
+def normalizeHostPath(path):
+    if path is None:
+        return ''
+
+    normalized = str(path).strip().strip('"').strip("'")
+    if normalized == '':
+        return ''
+
+    normalized = os.path.expandvars(os.path.expanduser(normalized))
+
+    if platform.system() == 'Windows':
+        return normalized.replace('/', '\\')
+
+    normalized = normalized.replace('\\', '/')
+
+    if isWindowsDrivePath(normalized):
+        drive = normalized[0]
+        relativePath = normalized[2:].lstrip('/\\')
+
+        for candidate in _iterLinuxDriveCandidates(drive, relativePath):
+            if os.path.exists(candidate):
+                return os.path.normpath(candidate)
+
+        suffixCandidate = _findLinuxPathByVolumeSuffix(relativePath)
+        if suffixCandidate is not None:
+            return os.path.normpath(suffixCandidate)
+
+        # Best effort fallback for expected Linux drive mounts (/mnt/d/...).
+        return os.path.normpath(next(_iterLinuxDriveCandidates(drive, relativePath)))
+
+    return os.path.normpath(normalized)
+
+
+def normalizeConfiguredPaths(configuration):
+    for pathKey in ['collectionDir', 'outputDir', 'selectionPath']:
+        if pathKey in configuration:
+            configuration[pathKey] = normalizeHostPath(configuration[pathKey])
+    return configuration
+
+
 # Resize image for opendingux
 def resize(imgPath):
     im = Image.open(imgPath)
@@ -327,6 +407,10 @@ def getRomsFolderPrefix(conversionType, conversionConf):
         return "/storage/roms/pcdata"
     else:
         return "."
+
+
+def hasMisterPack(outputDir):
+    return os.path.exists(os.path.join(outputDir, 'mymenu')) or os.path.exists(os.path.join(outputDir, 'TDL_VHD'))
 
 
 # Checks validity of the collection path and its content
