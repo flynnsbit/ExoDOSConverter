@@ -30,6 +30,7 @@ The conversion should cover the following :
  - when possible, custom or generic controller configuration
 
 Your collections will remain untouched by the conversion, as all relevant files are copied in the output folder during the process.
+Each conversion run now creates a new child build folder under your selected output path, and all generated artifacts are written inside that child folder.
 
 The tool is now fully compatible with Windows and Linux, Mac OS should work although some graphic issues may be present
 It should be used on a separate computer, not on the system you are targetting.
@@ -105,7 +106,23 @@ chmod u+x ExoDOSConverter.sh  # give execution perms (already done in git-cloned
 
 >Unzip `./Content/!DOSmetadata.zip` to the home dir of the collection, this should create a `./eXo/eXoDOS/!dos folder`
 
-- launch with `./ExoDOSConverter.sh` or `./ExoDOSConverter`
+- launch Tk GUI with `./ExoDOSConverter.sh` or `./ExoDOSConverter`
+- launch Linux Textual TUI with `./launch_exodosconverter_tui.sh`
+
+### Linux TUI (Textual)
+
+The project now includes a native Linux terminal UI entrypoint built with Textual.
+
+- entrypoint: `main_tui.py`
+- launcher script: `./launch_exodosconverter_tui.sh`
+- existing Tk GUI is still available (`main.py` / `ExoDOSConverter.sh`)
+
+TUI behavior is aligned with the GUI workflow:
+- same converter options and config persistence (`conf/conf-exo.conf`)
+- same collection detection and game selection features (filter, select, load/save custom selection)
+- same conversion engine backend and live logging
+- same Linux path normalization support for Windows-style configured paths (for example `D:\...`)
+- if you point to a parent mount folder that contains a collection subfolder (for example `/mnt/net/exodos` containing `eXoDOS/`), collection detection now auto-resolves to the correct collection root
 
 ### Windows installation and execution :
 
@@ -122,6 +139,30 @@ see [wiki page](https://github.com/Voljega/ExoDOSConverter/wiki/Expert-mode)
 ### MiSTeR
 
 see [wiki page](https://github.com/Voljega/ExoDOSConverter/wiki/MiSTeR-AO486-support)
+
+The converter now also generates an ao486-ready VHD automatically during MiSTeR conversion:
+- output location: `<selected output>/<run-build-name>/ao486/<build-name>/`
+- single selected game: VHD autoboots directly into that game launcher
+- multiple selected games: VHD autoboots into `MYMENU` and browses `C:\GAMES\`
+- game folders are kept as long filenames in multi-game mode
+- each conversion creates a new pack directory so builds do not overwrite each other
+- single-game builds: the base pack folder and VHD are named from the game name
+- multi-game builds: the app asks for a collection name, and uses it for both base folder and VHD filename
+- ao486 media folders (`cd`, `floppy`, `bootdisk`) are kept alongside the VHD inside that pack directory, and existing `imgset` auto-mount behavior is preserved
+- VHD capacity is computed from staged content + a 50MB growth buffer
+- if FAT allocation overhead (cluster/FAT table growth) still causes a full disk during copy, the builder automatically retries with a larger expanded VHD target
+- FAT32 default template preference now uses `450M-DOS71.vhd` (from `<repo>/vhdtemplate/`) whenever a FAT32 base is selected/required
+- DOS templates now include a FAT32 baseline (`ao486_dos_fat32_200MB.vhd`) so large growth paths can stay FAT32-compatible
+
+Template VHD lookup is automatic and currently checks:
+- `$EXODOS_AO486_TEMPLATE_ROOT` (if set)
+- `<repo>/vhdtemplate`
+- `~/exodos-build`
+- `/home/shawn/exodos-build`
+
+Expected template folders:
+- `ao486_dos622_templates` for eXoDOS conversions
+- `ao486_win31_templates` for eXoWin3x conversions
 
 ## RG350
 

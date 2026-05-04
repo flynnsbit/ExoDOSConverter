@@ -37,4 +37,8 @@ if [[ "$INSTALLED_REQ_HASH" != "$STRICT_MARKER" && "$INSTALLED_REQ_HASH" != "$FA
     fi
 fi
 
-exec "$PYTHON_BIN" "$SCRIPT_DIR/main.py"
+if ! "$PYTHON_BIN" -c "import textual" >/dev/null 2>&1; then
+    "$PIP_BIN" install textual
+fi
+
+exec "$PYTHON_BIN" "$SCRIPT_DIR/main_tui.py"

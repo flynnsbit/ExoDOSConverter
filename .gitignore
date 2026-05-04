@@ -8,8 +8,8 @@ ExoDOSConverter.iml
 name_mapping.txt
 *.IDX
 *.idx
+*.vhd
 
 ExoDOSConverter.exe
 main.spec
 **/build
-

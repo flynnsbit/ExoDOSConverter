@@ -343,6 +343,17 @@ def createEditBat(gGator):
 
 # Create about.png
 def text2png(scriptDir, text, cover, generatedImgpath):
+    if hasattr(Image, 'Resampling'):
+        resampleFilter = Image.Resampling.LANCZOS
+    else:
+        resampleFilter = Image.ANTIALIAS
+
+    def getTextSize(value):
+        if hasattr(font, 'getbbox'):
+            left, top, right, bottom = font.getbbox(value)
+            return right - left, bottom - top
+        return font.getsize(value)
+
     padding = 10
     imageWidth = 200
     textWidth = 640 - imageWidth
@@ -361,11 +372,11 @@ def text2png(scriptDir, text, cover, generatedImgpath):
     coverWidth, coverHeight = coverImg.size
     ratio = float(coverHeight) / float(coverWidth)
     newHeight = int(ratio * float(imageWidth))
-    img.paste(coverImg.resize((imageWidth, newHeight), Image.ANTIALIAS), (textWidth - padding, padding))
+    img.paste(coverImg.resize((imageWidth, newHeight), resampleFilter), (textWidth - padding, padding))
 
     lines = []
     line = u""
-    line_height = font.getsize(text)[1]
+    line_height = getTextSize('Ag')[1]
     text_height = 0
     for word in text.split():
         if word == REPLACEMENT_CHARACTER:  # give a blank line
@@ -376,7 +387,7 @@ def text2png(scriptDir, text, cover, generatedImgpath):
             # Change the text width when we are below coevr height + padding
             if text_height >= (newHeight + padding):
                 textWidth = 640
-        elif font.getsize(line + ' ' + word)[0] <= (textWidth - padding - padding):
+        elif getTextSize(line + ' ' + word)[0] <= (textWidth - padding - padding):
             line += ' ' + word
         else:  # start a new line
             lines.append(line[1:])  # slice the white space in the begining of the line

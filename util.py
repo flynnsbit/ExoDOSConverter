@@ -5,6 +5,7 @@ import platform
 import collections
 import shutil
 import re
+from datetime import datetime
 from PIL import Image
 import requests
 import urllib.request
@@ -367,8 +368,33 @@ def normalizeHostPath(path):
 def normalizeConfiguredPaths(configuration):
     for pathKey in ['collectionDir', 'outputDir', 'selectionPath']:
         if pathKey in configuration:
-            configuration[pathKey] = normalizeHostPath(configuration[pathKey])
+            normalizedPath = normalizeHostPath(configuration[pathKey])
+            if pathKey == 'collectionDir':
+                normalizedPath = resolveCollectionPath(normalizedPath)
+            configuration[pathKey] = normalizedPath
     return configuration
+
+
+def sanitizeBuildName(name):
+    sanitized = re.sub(r'[<>:"/\\|?*]', '_', str(name).strip()).rstrip('.')
+    return sanitized
+
+
+def createUniqueBuildOutputDir(outputRootDir, buildName):
+    safeName = sanitizeBuildName(buildName)
+    if safeName == '':
+        safeName = 'Build-' + datetime.now().strftime('%Y%m%d-%H%M%S')
+
+    os.makedirs(outputRootDir, exist_ok=True)
+
+    targetDir = os.path.join(outputRootDir, safeName)
+    index = 2
+    while os.path.exists(targetDir):
+        targetDir = os.path.join(outputRootDir, safeName + '-' + str(index))
+        index += 1
+
+    os.makedirs(targetDir, exist_ok=True)
+    return targetDir
 
 
 # Resize image for opendingux
@@ -377,7 +403,11 @@ def resize(imgPath):
     height = 200
     wpercent = (height / float(im.size[1]))
     vsize = int((float(im.size[0]) * float(wpercent)))
-    im = im.resize((vsize, height), Image.ANTIALIAS)
+    if hasattr(Image, 'Resampling'):
+        resampleFilter = Image.Resampling.LANCZOS
+    else:
+        resampleFilter = Image.ANTIALIAS
+    im = im.resize((vsize, height), resampleFilter)
     im.save(imgPath, "PNG")
 
 
@@ -422,7 +452,7 @@ def isCollectionPath(collectionPath, collection):
            and os.path.exists(os.path.join(collectionPath, 'Images'))
 
 
-def validCollectionPath(collectionPath):
+def _validCollectionPathStrict(collectionPath):
     if isCollectionPath(collectionPath, EXODOS):
         return EXODOS
     elif isCollectionPath(collectionPath, EXOWIN3X):
@@ -435,6 +465,55 @@ def validCollectionPath(collectionPath):
         return C64DREAMS
     else:
         return None
+
+
+def _findSubdirCaseInsensitive(parentPath, subdirName):
+    strictPath = os.path.join(parentPath, subdirName)
+    if os.path.isdir(strictPath):
+        return strictPath
+
+    try:
+        entries = os.listdir(parentPath)
+    except OSError:
+        return None
+
+    for entry in entries:
+        if entry.lower() == subdirName.lower():
+            candidate = os.path.join(parentPath, entry)
+            if os.path.isdir(candidate):
+                return candidate
+    return None
+
+
+def resolveCollectionPath(collectionPath):
+    normalizedPath = normalizeHostPath(collectionPath)
+    if normalizedPath == '' or not os.path.isdir(normalizedPath):
+        return normalizedPath
+
+    if _validCollectionPathStrict(normalizedPath) is not None:
+        return normalizedPath
+
+    # Support the common Linux mount layout where users pick a parent folder
+    # that contains collection folders like eXoDOS/eXoWin3x/C64 Dreams.
+    candidateNames = [
+        getCollectionGamesDirToken(EXODOS),
+        getCollectionGamesDirToken(EXOWIN3X),
+        getCollectionGamesDirToken(EXOAPPLEIIGS),
+        getCollectionGamesDirToken(EXOSCUMMVM),
+        getCollectionRootDirToken(C64DREAMS),
+    ]
+
+    for candidateName in candidateNames:
+        candidatePath = _findSubdirCaseInsensitive(normalizedPath, candidateName)
+        if candidatePath is not None and _validCollectionPathStrict(candidatePath) is not None:
+            return candidatePath
+
+    return normalizedPath
+
+
+def validCollectionPath(collectionPath):
+    resolvedPath = resolveCollectionPath(collectionPath)
+    return _validCollectionPathStrict(resolvedPath)
 
 
 # Parse the collection static cache file to generate list of games

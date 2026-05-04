@@ -8,6 +8,7 @@ import util
 import dosboxconfv6
 from zipfile import ZipFile
 import mymenupacker
+import ao486vhd
 from gamegenerator import GameGenerator
 
 
@@ -182,13 +183,29 @@ class ExoConverter:
         # do not use getLocalGameDataOutputDir as game data are in subdir at that point
         if gGator.isWin3x():
             # Needs to rename sub game dir first then move content to .pc folder , then delete sub game dir
+            gameOutputDir = gGator.getLocalGameOutputDir()
+            gameSubDir = self.__resolveExtractedGameSubDir__(gameOutputDir, gGator.game)
+            if gameSubDir is None:
+                self.logger.log(
+                    '  <WARNING> Could not find extracted game subdir "%s" in %s; keeping extracted layout as-is'
+                    % (gGator.game, gameOutputDir),
+                    self.logger.WARNING
+                )
+                return
+
             subDirTempName = gGator.game + '-tempEDC'
-            os.rename(os.path.join(gGator.getLocalGameOutputDir(), gGator.game), os.path.join(gGator.getLocalGameOutputDir(), subDirTempName))
-            for gameFile in os.listdir(os.path.join(gGator.getLocalGameOutputDir(), subDirTempName)):
-                shutil.move(os.path.join(gGator.getLocalGameOutputDir(), subDirTempName, gameFile), gGator.getLocalGameOutputDir())
+            subDirTempPath = os.path.join(gameOutputDir, subDirTempName)
+            suffix = 2
+            while os.path.exists(subDirTempPath):
+                subDirTempPath = os.path.join(gameOutputDir, subDirTempName + '-' + str(suffix))
+                suffix += 1
+
+            os.rename(gameSubDir, subDirTempPath)
+            for gameFile in os.listdir(subDirTempPath):
+                shutil.move(os.path.join(subDirTempPath, gameFile), gameOutputDir)
             # Check if it's empty !! a subdir might be named the same
-            if len(os.listdir(os.path.join(gGator.getLocalGameOutputDir(), subDirTempName))) == 0:
-                shutil.rmtree(os.path.join(gGator.getLocalGameOutputDir(), subDirTempName))
+            if len(os.listdir(subDirTempPath)) == 0:
+                shutil.rmtree(subDirTempPath)
 
     # Unzip game zip
     def __unzipGame__(self, gameZipPath, gGator):
@@ -202,6 +219,21 @@ class ExoConverter:
         if len(unzippedDirs) == 1 and unzippedDirs[0] != gGator.game and not gGator.isWin3x():
             self.logger.log("  fixing extracted dir %s to !dos name %s" % (unzippedDirs[0], gGator.game))
             os.rename(os.path.join(gGator.getLocalGameOutputDir(), unzippedDirs[0]), os.path.join(gGator.getLocalGameOutputDir(), gGator.game))
+
+    @staticmethod
+    def __resolveExtractedGameSubDir__(outputDir, expectedGameDir):
+        strictPath = os.path.join(outputDir, expectedGameDir)
+        if os.path.isdir(strictPath):
+            return strictPath
+
+        caseInsensitivePath = util._findSubdirCaseInsensitive(outputDir, expectedGameDir)
+        if caseInsensitivePath is not None:
+            return caseInsensitivePath
+
+        extractedDirs = [entry for entry in os.listdir(outputDir) if os.path.isdir(os.path.join(outputDir, entry))]
+        if len(extractedDirs) == 1:
+            return os.path.join(outputDir, extractedDirs[0])
+        return None
 
     # specific convertion type treatments after converting all games
     def __postConversion__(self):
@@ -241,6 +273,20 @@ class ExoConverter:
                     if os.path.exists(os.path.join(self.outputDir, "bootdisk")):
                         shutil.move(os.path.join(self.outputDir, "bootdisk"),
                                     os.path.join(os.path.join(self.outputDir, "ao486")))
+
+                    self.logger.log("  Building ao486 VHD output")
+                    vhdBuilder = ao486vhd.Ao486VhdBuilder(
+                        self.scriptDir,
+                        self.outputDir,
+                        self.collectionVersion,
+                        self.logger,
+                        self.conversionConf
+                    )
+                    if not vhdBuilder.build():
+                        self.logger.log(
+                            '  <ERROR> ao486 VHD generation failed (frontend pack was still generated)',
+                            self.logger.ERROR
+                        )
                 else:
                     self.logger.log(
                         '  Some critical errors seems to have happened during process.\n  Skipping MyMenu assembly phase',

@@ -1,5 +1,5 @@
 import tkinter as Tk
-from tkinter import ttk, messagebox, filedialog
+from tkinter import ttk, messagebox, filedialog, simpledialog
 from operator import attrgetter
 import tkinter.font as Font
 import wckToolTips
@@ -454,18 +454,19 @@ class ExoGUI:
     def __handleCollectionFolder__(self, *args):
         collectionDir = self.guiVars['collectionDir'].get()
         normalizedCollectionDir = util.normalizeHostPath(collectionDir)
-        if normalizedCollectionDir != collectionDir:
-            self.guiVars['collectionDir'].set(normalizedCollectionDir)
+        resolvedCollectionDir = util.resolveCollectionPath(normalizedCollectionDir)
+        if resolvedCollectionDir != collectionDir:
+            self.guiVars['collectionDir'].set(resolvedCollectionDir)
             return
 
-        if normalizedCollectionDir == '':
+        if resolvedCollectionDir == '':
             self.guiVars['collectionVersion'].set('None')
             self.guiVars['collectionVersionLabel'].set(
                 self.guiStrings['collectionVersion'].label + ': ' + self.guiVars['collectionVersion'].get())
             self.__handleComponentsState__(False)
             return
 
-        collectionVersion = util.validCollectionPath(normalizedCollectionDir)
+        collectionVersion = util.validCollectionPath(resolvedCollectionDir)
         self.guiVars['collectionVersion'].set(collectionVersion)
         self.guiVars['collectionVersionLabel'].set(self.guiStrings['collectionVersion'].label + ': ' + self.guiVars['collectionVersion'].get())
 
@@ -797,6 +798,8 @@ class ExoGUI:
         error = False
         for key in ['outputDir', 'collectionDir']:
             normalizedPath = util.normalizeHostPath(self.guiVars[key].get())
+            if key == 'collectionDir':
+                normalizedPath = util.resolveCollectionPath(normalizedPath)
             if normalizedPath != self.guiVars[key].get():
                 self.guiVars[key].set(normalizedPath)
             if not os.path.exists(normalizedPath):
@@ -812,7 +815,7 @@ class ExoGUI:
         self.__handleComponentsState__(True)
 
         self.logger.log('\n<--------- Starting ' + self.setKey + ' Process --------->')
-        collectionDir = util.normalizeHostPath(self.guiVars['collectionDir'].get())
+        collectionDir = util.resolveCollectionPath(util.normalizeHostPath(self.guiVars['collectionDir'].get()))
         if collectionDir != self.guiVars['collectionDir'].get():
             self.guiVars['collectionDir'].set(collectionDir)
         conversionType = self.guiVars['conversionType'].get()
@@ -845,13 +848,38 @@ class ExoGUI:
         conversionConf['downloadOnDemand'] = True if self.guiVars['downloadOnDemand'].get() == 1 else False
         conversionConf['mapper'] = self.guiVars['mapper'].get()
 
-        games = [self.fullnameToGameDir.get(name) for name in self.selectedGamesValues.get()]
+        selectedGameLabels = list(self.selectedGamesValues.get())
+        games = [self.fullnameToGameDir.get(name) for name in selectedGameLabels]
 
-        for g in self.selectedGamesValues.get():
+        for g in selectedGameLabels:
             if self.fullnameToGameDir.get(g) is None:
                 self.logger.log(
                     "Game data not found for %s\nIf you used a v4 selection, some games names may have changed in v5" % g,
                     self.logger.ERROR)
+
+        if len(selectedGameLabels) == 1:
+            buildOutputName = selectedGameLabels[0]
+        elif len(selectedGameLabels) > 1:
+            collectionName = simpledialog.askstring(
+                'Build Collection Name',
+                'Multiple games selected.\nEnter a collection name for the build folder (and MiSTeR VHD if applicable):',
+                parent=self.window,
+            )
+            if collectionName is None:
+                self.logger.log('Build cancelled (collection name prompt was cancelled)', self.logger.WARNING)
+                self.__handleComponentsState__(False)
+                return
+            collectionName = collectionName.strip()
+            if collectionName == '':
+                self.logger.log('Build cancelled (collection name is required)', self.logger.ERROR)
+                self.__handleComponentsState__(False)
+                return
+            buildOutputName = collectionName
+        else:
+            buildOutputName = ''
+
+        if conversionType == util.mister:
+            conversionConf['misterBuildName'] = buildOutputName
 
         self.logger.log(str(len(games)) + ' game(s) selected for conversion')
 
@@ -859,6 +887,8 @@ class ExoGUI:
         if collectionVersion is None:
             self.logger.log("%s doesn't seem to be a valid collection folder" % collectionDir)
         else:
+            outputDir = util.createUniqueBuildOutputDir(outputDir, buildOutputName)
+            self.logger.log('Using output build directory: ' + outputDir)
             if collectionVersion is util.C64DREAMS:
                 converter = C64Converter(games, self.cache, self.scriptDir, collectionVersion, collectionDir, outputDir,
                                          conversionType, useLongFolderNames, useGenreSubFolders, conversionConf,

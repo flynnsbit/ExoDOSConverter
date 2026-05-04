@@ -19,11 +19,19 @@ It supports multiple source collections:
 - Program entry point.
 - Creates `Logger`, instantiates `ExoGUI`, and starts UI loop.
 
+### `main_tui.py`
+- Linux TUI entry point.
+- Creates `TuiLogger`, instantiates `ExoTUI`, and starts the Textual app loop.
+
 ### `ExoDOSConverter.sh`
 - Runs `python3 main.py`.
 
 ### `exoDOSConverter.sh`
 - Also runs `python3 main.py` (same behavior as above script).
+
+### `launch_exodosconverter_tui.sh`
+- Linux launcher for TUI mode.
+- Bootstraps local virtualenv dependencies and runs `python main_tui.py`.
 
 ### `build.bat`
 - Windows packaging script:
@@ -36,20 +44,25 @@ It supports multiple source collections:
 
 ## 3) High-level runtime architecture
 
-1. `main.py` starts `ExoGUI`.
-2. `ExoGUI` loads:
+1. `main.py` starts `ExoGUI` (Tk desktop UI) or `main_tui.py` starts `ExoTUI` (Textual terminal UI).
+2. Both frontends use shared state/workflow in `exoappstate.py` for:
+   - config load/save (`conf/conf-exo.conf`)
+   - path normalization and collection detection
+   - game selection/filter/custom selection file operations
+   - conversion parameter assembly and converter dispatch
+3. UI flow then loads:
    - persistent config (`conf/conf-exo.conf`) via `conf.loadConf`
    - UI labels/help (`gui/gui-en-exo.csv`) via `util.loadUIStrings`
    - game mapping cache (`data/*.csv`) via `util.fullnameToGameDir`
-3. User selects games and clicks **Proceed**.
-4. `ExoGUI` chooses converter by detected collection type:
+4. User selects games and triggers **Proceed**.
+5. Frontend chooses converter by detected collection type:
    - `ExoConverter`
    - `C64Converter`
    - `AppleIIGSConverter`
    - `ScummVMConverter`
-5. Converter performs per-game processing and metadata export (`gamelist.xml`).
-6. Target-specific post-processing adjusts output layout/launch artifacts.
-7. Logs are pushed through `Logger.log_queue` and rendered in the UI console.
+6. Converter performs per-game processing and metadata export (`gamelist.xml`).
+7. Target-specific post-processing adjusts output layout/launch artifacts.
+8. Logs are pushed through queue-based logger and rendered in the active frontend.
 
 ## 4) Core shared concepts
 
@@ -141,7 +154,7 @@ It supports multiple source collections:
   - `__convertGame__`: metadata/genre, build `GameGenerator`, convert if not already output.
   - `__copyGameDataToOutputDir__`: finds source zip from game conf bats, optional download-on-demand, unzip, update zip merge, Win3x flattening.
   - `__unzipGame__`: unzip and fix root directory naming.
-  - `__postConversion__`: target-specific cleanup; MiSTer path now assembles MyMenu frontend payload and final pack layout.
+  - `__postConversion__`: target-specific cleanup; MiSTer path assembles MyMenu frontend payload, organizes ao486 media folders, and now triggers automatic ao486 VHD generation.
 
 ## `exogui.py`
 - Class: `ExoGUI`
@@ -160,6 +173,27 @@ It supports multiple source collections:
   - handlers: `__handleCollectionFolder__`, `__filterGamesList__`, selection load/save/move methods
   - process actions: `__clickVerify__`, `__clickSave__`, `__clickProceed__`
   - UI state and console refresh: `__handleComponentsState__`, `__updateConsoleFromQueue__`, `__writeToConsole__`
+
+## `exoappstate.py`
+- Class: `ExoAppState`
+- Purpose: shared non-visual app workflow used by TUI (and suitable for reuse by other frontends).
+- Responsibilities:
+  - load/normalize configuration values (including Linux path normalization)
+  - refresh/validate collection and load cache/game maps
+  - maintain selected games and filter state
+  - load/save custom selection files
+  - save config file using UI-string order/help comments
+  - assemble conversion config and build/run appropriate converter class
+
+## `exotui.py`
+- Class: `ExoTUI` (Textual `App`)
+- Purpose: native Linux terminal UI frontend.
+- Responsibilities:
+  - render path/config/forms, available/selected game lists, action buttons, and log pane
+  - mirror GUI actions (refresh, verify, save config, proceed, load/save selection)
+  - run long operations (collection refresh, conversion) in background threads
+  - consume queue logs and render with severity colors
+  - apply conversion/collection-dependent control enable/disable rules
 
 ## `gamegenerator.py`
 - Class: `GameGenerator`
@@ -213,6 +247,13 @@ It supports multiple source collections:
   - `logProcess`: streams subprocess stdout/stderr into logger with ANSI strip.
   - `printDict`, `logList`: convenience wrappers.
 
+## `tuilogger.py`
+- Class: `TuiLogger`
+- Purpose: queue-only logger variant for Textual UI.
+- Behavior:
+  - reuses `Logger` queue contract
+  - suppresses direct stdout printing so terminal rendering remains controlled by Textual
+
 ## `mapping.py`
 - Class: `Mapping`
 - Purpose: generate target controller mapping files (primarily Batocera `padto.keys`).
@@ -228,6 +269,22 @@ It supports multiple source collections:
 - Functions:
   - `copySupportZips`: copies optional support archives into `games/`.
   - `extractFrontend`: extracts `data/mister/distro.zip` into output root, normalizing frontend folder to `mymenu/`.
+
+## `ao486vhd.py`
+- Class: `Ao486VhdBuilder`
+- Purpose: build ao486-compatible VHD images from MiSTeR conversion output.
+- Responsibilities:
+  - detect single-game vs multi-game mode from converted `games/` folders
+  - choose build name from the conversion run build name (single-game auto-name or user-provided multi-game collection name)
+  - stage `C:\` layout payload (`GAMES`, `MYMENU`, optional support archives)
+  - preserve external MiSTeR media automation by keeping `cd`, `floppy`, and `bootdisk` alongside the generated VHD inside each build pack directory
+  - size-select template VHDs from DOS/Win3 template families with extra growth buffer
+  - for DOS FAT32 builds, prefer `450M-DOS71.vhd` as the default FAT32 base when available
+  - auto-expand selected template when required free space exceeds current template free capacity
+  - estimate FAT/cluster metadata overhead during sizing and retry with larger targets when copy-time disk-full errors still occur
+  - for FAT32 templates, use rebuild-based expansion (reformat larger FAT32 image with preserved DOS boot sector + recopy template payload) to avoid `fatresize` partition-growth limits on small FAT32 bases
+  - patch `AUTOEXEC.BAT` with managed ExoDOSConverter autoboot block
+  - emit final VHD file under `<run-output>/ao486/<build-name>/` (auto-suffixed on collisions)
 
 ## `metadatahandler.py`
 - Class: `MetadataHandler`
@@ -335,6 +392,7 @@ It supports multiple source collections:
 
 ## 7) Important runtime artifacts generated in output
 
+- Each conversion run uses a new child build directory under the selected output root; all items below are created within that run directory.
 - `gamelist.xml` (metadata index)
 - `downloaded_images/` and `manuals/`
 - per-game folders/files (`.pc`, `.zip`, `.m3u`, `.scummvm`, etc. depending on flow)
@@ -342,7 +400,8 @@ It supports multiple source collections:
 - MiSTer-specific:
   - frontend folder `mymenu/`
   - game folders under `games/` with `autorun.bat` entrypoints
-  - `ao486` media structure (`cd`, `floppy`, `bootdisk` moved under `ao486`)
+  - `ao486` media structure (`cd`, `floppy`, `bootdisk`) moved under `ao486/<build-name>/`
+  - per-build ao486 pack directories in `ao486/<build-name>/` containing VHD + media folders
 
 ## 8) External dependencies used by code
 

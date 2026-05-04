@@ -6,7 +6,9 @@
   - `pip install -r requirements.txt`
 - Run the app locally:
   - `python3 main.py`
+  - `python3 main_tui.py` (Linux Textual TUI)
   - or `./ExoDOSConverter.sh` (same target)
+  - or `./launch_exodosconverter_tui.sh` (Linux Textual TUI launcher)
 - Build Windows executable (from repo root):
   - `build.bat`
   - manual equivalent from `build.txt`: `pyinstaller --icon=exodosicon.ico --clean -F main.py`
@@ -23,9 +25,13 @@
 
 - No lint tooling/configuration is defined in this repository (`ruff`, `flake8`, `pylint`, `pyproject.toml`, etc. are absent).
 
+### Commit workflow
+
+- For every check-in, run `./pre_commit_cleanup.sh` as part of the commit flow to clean the latest commit message before push.
+
 ## High-level architecture
 
-`main.py` starts the Tkinter UI (`ExoGUI`). The GUI is the orchestration entrypoint: it loads persisted settings from `conf/conf-exo.conf`, loads UI labels/help text from `gui/gui-en-exo.csv`, validates the selected collection path, builds image caches, and dispatches conversion work in a background thread when the user clicks **Proceed**.
+`main.py` starts the Tkinter UI (`ExoGUI`) and `main_tui.py` starts the Textual Linux TUI (`ExoTUI`). Both use shared app workflow/state (`exoappstate.py`) with persisted settings from `conf/conf-exo.conf`, collection validation, Linux-aware path normalization, and converter dispatch to the same backend converters.
 
 Converter selection is collection-driven in `ExoGUI.__clickProceed__`:
 
