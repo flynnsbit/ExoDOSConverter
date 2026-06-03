@@ -22,16 +22,61 @@ These apply to EVERY generated stub. Mined from A6 (original VHD vs Top300_updat
 SHA256 diff across 300 games) and A3 (autorun_dump.txt across 286 games).
 
 ### R1 — CD-mount: `imgset` → `CALL imgtry` with CHD-preferred fallback
-**Trigger:** game has ≥1 CD image. Frequency: 128/286 games (~44.8%) need CD mount.
-**Input (legacy):** `imgset ide10 "/cd/<game>/<game>.iso"`
-**Output (emit):** `CALL imgtry ide10 D "/cd/<game>/<game>.chd" "/cd/<game>/<game>.iso"`
-- Source-extension priority: `.chd` > `.cue` > `.iso` > `.img`
-- Applies identically to `ide11` (second CD drive), `fdd0`/`fdd1` (floppy), and
-  `ide00`/`ide01` (bootdisk) — `imgtry` accepts any image type
-- Multi-CD games: emit one `imgtry` per disc (ide10 + ide11), preserve any user-facing
-  disc-switch prompt as `echo` text
+**Trigger:** game has ≥1 CD image. Frequency: **1220/7666 games (15.9%)** across full
+eXoDOS v6 (NOT the 45% previously cited, which was a curated-Top300 subset). The vast
+majority of games (6446 / 84.1%) need no CD mount at all.
+**Input (legacy from eXoDOS dosbox.conf [autoexec]):**
+`imgmount d ".\eXoDOS\<dosname>\cd\<image>.cue" -t cdrom`
+**Output (emit):** `CALL imgtry ide10 D "/cd/<dosname>/<image>.chd" "/cd/<dosname>/<image>.cue"`
+- Source-extension priority: `.chd` > `.cue` > `.iso` > `.img` > `.bin`
+- Applies identically to `ide11` (second CD drive), `fdd0`/`fdd1` (floppy via R-Floppy), and
+  `ide00`/`ide01` (bootdisk via R-Boot)
+
+### R1a — Multi-disc Pattern A (disc-swap on single drive)
+**Trigger:** legacy bat has single `imgmount d "a.cue" "b.cue" ...` line with N≥2 images
+on the same drive letter. Frequency: vast majority of multi-disc games.
+**Examples:** Gabriel Knight 2 (6 discs), 7th Guest (2 discs), most multi-CD titles.
+**Output (emit):** `CALL imgtry ide10 D "a.chd" "b.chd" "c.chd" ...` — imgtry accepts
+multi-image lists; MiSTer's AO486 supports Ctrl-F4-equivalent disc swap on each IDE CD slot.
+**Preserve** any user-facing `echo This game has N CDs, press <key> to switch` text as
+informational lines before the launcher.
+
+### R1b — Multi-disc Pattern B (multi-drive expansion content)
+**Trigger:** legacy bat has multiple `imgmount` lines mapping different drive letters
+(D:, E:, F:, … up to J:) to different CD images. Auto-detect by: more than 2 distinct
+drive letters used for cdrom mounts.
+**Frequency:** ~10-20 games out of 88 multi-disc total (needs precise count in Phase D
+pre-flight; estimate). Known examples: **Links LS 1997 (9 images across 7 drives)**,
+likely Pandora Directive, Wing Commander IV PoF (6 images each — need verification).
+**Constraint:** AO486 has only 2 IDE CD slots (`ide10` = D:, `ide11` = E:). Cannot
+directly emulate 7-drive configs.
+**Strategy:**
+1. **Default behaviour:** emit `CALL imgtry ide10 D` with the first image, emit
+   `CALL imgtry ide11 E` with the second image, log MULTI_DRIVE_CD_WARNING listing
+   the dropped images for user awareness.
+2. **Escape hatch via `overrides.csv` `__multi_drive_cd_swap: true`:** ships a small
+   helper bat that lets the user manually swap any of the N images into the D: or E:
+   slot via a per-game menu (uses MiSTer `imgtry` runtime swap support).
+3. **For Native PC (PicoIDE) target later:** PicoIDE may support more CD drives — no
+   work needed now, just preserve the per-image manifest in `<game>.cdimages` companion
+   file for future use.
+**Phase D pre-flight action:** classify each multi-disc game as A or B and report in
+build_report.txt.
+
+### R1c — Multi-disc Pattern A frequency distribution
+**Across full eXoDOS v6:**
+- 1132 games (14.77%): 1 CD image
+- 53 games (0.69%): 2 CD images
+- 19 games (0.25%): 3 CD images
+- 10 games (0.13%): 4 CD images
+- 2 games (0.03%): 5 CD images
+- 3 games (0.04%): 6 CD images (GK2, pandora, WC4PoF)
+- 1 game (0.01%): 9 CD images (LinksLS1)
+**Source:** dosbox.conf [autoexec] `imgmount` scan, 2026-06-03.
 **Source:** Top300_updates universal pattern, verified across LORDSOFA, ABUSE199,
 ALBION19, DESCENT1, 7thguest, Abuse, ActionSo, etc. (`session-state/files/a5_a6_vhd_mining_report.md`).
+**Full-collection scan (2026-06-03):** 1220/7666 games (15.9%) have at least one CD;
+6446 (84.1%) have none. See R1c for image-count breakdown.
 
 ### R2 — `pause` → `@jchoice` universal substitution
 **Trigger:** any generated bat needing a "press any key" prompt. Frequency: 300/300
@@ -256,6 +301,28 @@ launcher (which we inline via R5) calls them if needed.
 **Priority:** P0 by absence (the rule is "do not inject"). Recorded for context.
 **Source:** A6 negative finding.
 
+### R-Floppy — Floppy disk mount via imgtry fdd0/fdd1
+**Trigger:** legacy `imgmount a "...img" -t floppy` (or `b` for fdd1). Frequency:
+**121/7666 games (1.6%)** across full eXoDOS v6.
+**Input (legacy):** `imgmount a ".\eXoDOS\<dosname>\floppy\disk1.img" -t floppy`
+**Output (emit):** `CALL imgtry fdd0 A "/floppy/<dosname>/disk1.img"`
+- Multi-floppy games (Pattern A disc-swap equivalent): pass multiple images on same
+  fdd slot, user swaps via Ctrl-F4 equivalent
+- Floppy `.img` files don't have CHD/cue/iso alternatives; just pass `.img` directly
+**Priority:** P1 (deterministic mechanical rule, applies to 121 games).
+**Source:** eXoDOS dosbox.conf scan (2026-06-03).
+
+### R-Boot — Hard-disk boot image via imgtry ide00
+**Trigger:** legacy `boot c.img` or `imgmount c c.img -t hdd` then `boot`. Frequency:
+**16/7666 games (0.2%)** plus 2 with hdd imgmount (no boot).
+**Input (legacy):** `imgmount c ".\boot.img" -t hdd` + `boot c`
+**Output (emit):** `CALL imgtry ide00 C "/bootdisk/<dosname>/boot.img"` — AO486 boots from
+the imgtry'd HDD image directly.
+**Priority:** P3 — rare enough that per-game testing is appropriate. Most "boot"
+games on eXoDOS are Windows 3.1/95 titles that fall outside the MiSTer AO486 scope
+anyway.
+**Source:** eXoDOS dosbox.conf scan (2026-06-03).
+
 ---
 
 ## Section 5 — Existing hardcoded MiSTer flow (P0/P1, to retire)
@@ -355,6 +422,7 @@ to `data/mister/overrides.csv`. CSV schema:
 | `__first_run_fix` | str | path to a one-shot fix bat shipped with the converter. Used by R7. |
 | `__custom_view` | str (semi-list) | force inclusion in named optional views regardless of metadata. |
 | `__exclude_view` | str (semi-list) | force exclusion from named views. |
+| `__multi_drive_cd_swap` | bool | enable helper bat for multi-drive expansion CDs (Pattern B per R1b). For 10-20 games like Links LS 1997 that use 3+ drive letters for CDs. |
 | `__notes` | str | freeform; ignored by code, useful for the user. |
 
 **Target size:** the CSV should grow over time but stay small (<200 rows expected for
