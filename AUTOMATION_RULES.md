@@ -14,6 +14,20 @@ Publisher / Series.
 **Priority key.** P0 = universal mechanical rule, must always emit. P1 = common pattern,
 >10% of games. P2 = uncommon, <10%. P3 = escape-hatch via `data/mister/overrides.csv`.
 
+**Build modes (set once at converter dispatch based on pack size):**
+
+- **`mymenu_mode`** — pack has N > 1 games. MyMenu front-end is staged; `AUTOEXEC.BAT`
+  ends with `C:\MYMENU\MYMENU.EXE`. Each game gets view stubs (`C:\<view-root>\<bucket>\
+  <Long Title>\AUTORUN.BAT` + `README.ANS`). User navigates via MyMenu → stub → game.
+- **`single_game_mode`** — pack has exactly N == 1 game. NO MyMenu, NO view stubs.
+  AUTOEXEC.BAT directly invokes the eXoDOS-style launcher bat at the payload root:
+  `cd \GAMES\<dosname>` then `call <dosname>.bat`. The launcher bat (preserved
+  verbatim from eXoDOS, only mount-syntax rewrites applied) shows the sound-card
+  selection menu so the user experience matches eXoDOS exactly.
+
+Most rules below emit identically in both modes. Mode-divergent rules are tagged
+**[mode: mymenu]** or **[mode: single]**.
+
 ---
 
 ## Section 1 — Universal mechanical rules (P0)
