@@ -159,6 +159,30 @@ cd \GAMES\<dosname>
 
 ## Section 2 — First-run-fix sentinels — NOT migrated (P3 awareness)
 
+### R-CPU — MiSTer CPU ceiling filter (486SX/66 MHz)
+**Scope:** **MiSTer target only** — Native PC / PicoGUS / PicoIDE backend ignores this rule.
+**Trigger:** game-list builder, runs BEFORE staging. Each candidate game is inspected
+via its eXoDOS `dosbox.conf`.
+**Exclude if ANY of:**
+- `cycles=max` (5.6% / 431 games)
+- `cycles=<bare-number>` ≥ 25000 (13.3% / 1022 games)
+- `cycles=fixed <N>` with N ≥ 25000 (1 game)
+- `cputype=pentium*` (`pentium`, `pentium_slow`, `pentium_mmx`) — 21 games
+**Include if any of:**
+- `cycles=auto` (50.7% / 3886 games) — DOSBox auto-adapts; safe default for 486-era
+- `cycles=<bare>` < 25000 (29.6% / 2266 games — XT/286/386/486-class)
+- `cputype=386*`, `486_slow`, `auto`, `normal`, empty
+**Review (manual decision):** missing `dosbox.conf` (0.7% / 55 games) — log as
+`MISTER-CPU-REVIEW` and exclude by default.
+**Net estimate:** ~1450 / 7666 games (~19%) excluded; ~6216 (~81%) eligible.
+**Manual overrides:**
+- `overrides.csv` column `__force_mister_include: true` — opt a Pentium game in anyway
+- `overrides.csv` column `__force_mister_exclude: true` — block a CPU-eligible game
+  that's known broken on AO486
+**Reporting:** precheck phase emits `MISTER-CPU-EXCLUDE` per excluded game with the
+trigger reason (`reason=cycles=max` / `reason=cputype=pentium_slow` etc.).
+**Source:** User rule 2026-06-03; full-collection `dosbox.conf` scan (7666 games).
+
 ### R7 — `IF NOT EXIST FIXED.TXT GOTO FIXGAME` pattern
 **Trigger:** legacy game with payload-repair `xcopy` routine + `FIXED.TXT` sentinel.
 **Action:** **DO NOT MIGRATE.** New builds stage fresh from `G:\eXoDOS\eXo\eXoDOS\!dos\<dosname>\`
@@ -437,6 +461,8 @@ to `data/mister/overrides.csv`. CSV schema:
 | `__custom_view` | str (semi-list) | force inclusion in named optional views regardless of metadata. |
 | `__exclude_view` | str (semi-list) | force exclusion from named views. |
 | `__multi_drive_cd_swap` | bool | enable helper bat for multi-drive expansion CDs (Pattern B per R1b). For 10-20 games like Links LS 1997 that use 3+ drive letters for CDs. |
+| `__force_mister_include` | bool | override R-CPU exclusion; force a Pentium-class game into a MiSTer pack anyway (user accepts slow/broken). |
+| `__force_mister_exclude` | bool | force-exclude an R-CPU-eligible game from MiSTer packs (known-broken on AO486 despite passing CPU filter). |
 | `__notes` | str | freeform; ignored by code, useful for the user. |
 
 **Target size:** the CSV should grow over time but stay small (<200 rows expected for
