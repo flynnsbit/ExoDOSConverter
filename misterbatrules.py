@@ -49,6 +49,34 @@ IMGSET_RE = re.compile(r'^\s*imgset\s+(?P<device>\S+)\s+"(?P<path>[^"]+)"\s*$',
                         re.IGNORECASE)
 
 
+def _derive_chd_path(orig_path):
+    """Derive the CHD path for an original media file path.
+
+    Top300 convention (verified against ground-truth samples):
+        /cd/X/t7g1.cue      -> /cd/X/t7g1.chd            (single-dot stem)
+        /cd/X/wake_1.0.cue  -> /cd/X/wake_1.chd          (strips .0 version suffix)
+        /cd/X/moo2v1.0.cue  -> /cd/X/moo2v1.chd          (strips .0 version suffix)
+        /cd/X/albion.cue    -> /cd/X/albion.chd
+        /cd/X/disk1.ima     -> /cd/X/disk1.chd           (floppy)
+
+    Rule: take stem (basename without extension); strip trailing .<digits>
+    version segments; append .chd. Preserves forward-slash paths.
+    """
+    # Use forward-slash split to preserve posix-style paths (matches converter output)
+    if '/' in orig_path:
+        dirname, basename = orig_path.rsplit('/', 1)
+        dirname += '/'
+    else:
+        dirname = ''
+        basename = orig_path
+
+    stem, _ = os.path.splitext(basename)
+    # Strip trailing .<digit-only> segments (e.g., ".0", ".1.0")
+    while re.search(r'\.\d+$', stem):
+        stem = re.sub(r'\.\d+$', '', stem)
+    return dirname + stem + '.chd'
+
+
 def apply_r1(line):
     """R1: imgset device "<path>" -> CALL imgtry device <letter> "<chd>" "<original>".
 
@@ -59,8 +87,8 @@ def apply_r1(line):
       - original line unchanged if not an imgset line
 
     Per plan.md R1: source-priority chain .chd > .cue > .iso > .img.
-    The CHD path is the original with extension swapped to .chd.
-    The fallback is the original path verbatim (whatever extension).
+    The CHD path is derived via _derive_chd_path() which mirrors Top300's
+    multi-dot-stripping convention. The fallback is the original path verbatim.
 
     Verified against Top300 ground-truth samples in baseline/ground-truth/top300_updates/.
     """
@@ -72,28 +100,25 @@ def apply_r1(line):
     path = m.group('path')
 
     if device not in DEVICE_DRIVE_LETTER:
-        # Unknown device slot - leave the line as-is, log via caller if desired
         return line
 
-    base, ext = os.path.splitext(path)
+    _, ext = os.path.splitext(path)
 
     # Dummy "/cd/<game>/d" or similar directory-unmount lines: the path basename
     # has no recognized media extension. These were used to flush the CD slot
     # before mounting; imgtry handles flush atomically so they're redundant.
-    # Recognized media extensions (lowercase):
     media_exts = {'.cue', '.iso', '.img', '.ima', '.bin', '.chd', '.vhd'}
     if ext.lower() not in media_exts:
-        return None  # drop the line
+        return None
 
     drive = DEVICE_DRIVE_LETTER[device]
-    chd_path = base + '.chd'
+    chd_path = _derive_chd_path(path)
 
     # If original is already .chd, no fallback needed -- just a single-path imgtry call
     if ext.lower() == '.chd':
         return 'CALL imgtry {device} {drive} "{path}"'.format(
             device=device, drive=drive, path=path)
 
-    # Otherwise emit chd-preferred + original-fallback
     return 'CALL imgtry {device} {drive} "{chd}" "{orig}"'.format(
         device=device, drive=drive, chd=chd_path, orig=path)
 
