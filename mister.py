@@ -4,6 +4,7 @@ import shutil
 import ntpath
 import platform
 import lists
+import misterbatrules
 from PIL import ImageFont
 from PIL import Image
 from PIL import ImageDraw
@@ -67,6 +68,22 @@ def batsAndMounts(gGator):
     createSetupBat(gGator)
     createEditBat(gGator)
     os.remove(os.path.join(gGator.getLocalGameOutputDir(), 'dosbox.bat'))
+
+    # Phase D5 rules engine: rewrite imgset -> CALL imgtry with CHD-fallback chain (R1),
+    # drop dummy directory-unmount lines. See misterbatrules.py for the rule set.
+    # Applied to all generated/cloned bats; R1 only fires on imgset lines so eXoDOS
+    # source bats without imgset (most of them) pass through untouched.
+    for bat_name in ('1_Start.bat', 'run.bat'):
+        bat_path = os.path.join(gGator.getLocalGameOutputDir(), bat_name)
+        if not os.path.isfile(bat_path):
+            # run.bat for many games is in the data subdir, not the game output root
+            bat_path = os.path.join(gGator.getLocalGameDataOutputDir(), bat_name)
+        if os.path.isfile(bat_path):
+            n_in, n_out, n_dropped = misterbatrules.apply_rules_to_file(bat_path)
+            if n_dropped > 0:
+                gGator.logger.log(
+                    "      rules: dropped %i dummy imgset lines from %s"
+                    % (n_dropped, bat_name))
 
 
 # Treat run.bat command inside game directory
