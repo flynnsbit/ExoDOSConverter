@@ -24,6 +24,13 @@ def removeUnusedCds(game, localGameDataOutputDir, logger):
     if game in unusedCds:
         cue = os.path.join(localGameDataOutputDir, util.localOSPath(unusedCds[game]))
         cueDir = os.path.dirname(cue)
+        # The unusedCds map carries v5-era relative paths (e.g. "..\\WC\\cd") that
+        # may not exist in the eXoDOS v6 extracted layout. Skip gracefully rather
+        # than crashing the whole game conversion on a missing cleanup target.
+        if not os.path.isdir(cueDir):
+            logger.log("      no unused-cd cleanup dir for %s (%s); skipping"
+                       % (game, cueDir), logger.WARNING)
+            return
         cdFiles = [file for file in os.listdir(cueDir) if
                    os.path.splitext(ntpath.basename(cue))[0] == os.path.splitext(file)[0]
                    and os.path.splitext(file)[-1].lower() in ['.ccd', '.sub', '.cue', '.iso', '.img', '.bin']]
@@ -195,12 +202,32 @@ def locateMountedFiles(path, gGator):
         localPath = util.localOSPath(os.path.join(gGator.getLocalGameDataOutputDir(), path))
     if not os.path.exists(localPath):
         localPath = util.localOSPath(os.path.join(gGator.outputDir, path))
+    # Last resort: source bats inside run.bat (handleRunBat) are NOT run through
+    # the conf converter's imgmount-path rewrite, so they still carry the raw
+    # eXoDOS layout prefix ".\eXoDOS\<dosname>\..." (e.g. v6 comconra). The
+    # extractor flattens the leading "eXoDOS\<dosname>\" away, so the file really
+    # lives directly under the game output dir. Strip that prefix and retry.
+    if not os.path.exists(localPath):
+        strippedPath = __stripExoLayoutPrefix__(path)
+        if strippedPath is not None:
+            candidate = util.localOSPath(os.path.join(gGator.getLocalGameOutputDir(), strippedPath))
+            if os.path.exists(candidate):
+                localPath = candidate
     # TODO Same as the first two ifs but without genre ? used ?
     # if not os.path.exists(localPath):
     #     localPath = util.localOutputPath(os.path.join(gGator.outputDir, gGator.game + '.pc', path))
     # if not os.path.exists(localPath):
     #     localPath = util.localOutputPath(os.path.join(gGator.outputDir, gGator.game + '.pc', gGator.game, path))
     return localPath
+
+
+# Strips a leading "[.\]eXoDOS\<dosname>\" segment from an eXoDOS source path so
+# it matches the flattened game output layout. Returns None if no such prefix.
+def __stripExoLayoutPrefix__(path):
+    parts = [p for p in path.replace('/', '\\').split('\\') if p not in ('', '.')]
+    if len(parts) >= 3 and parts[0].lower() == 'exodos':
+        return os.path.join(*parts[2:])
+    return None
 
 
 # Convert cds file
@@ -220,23 +247,36 @@ def convertCD(localPath, gGator, letter='d'):
 
         imgmountDir = os.path.dirname(localPath)
 
-        cdFiles = [file for file in os.listdir(imgmountDir) if
-                   os.path.splitext(ntpath.basename(localPath))[0] == os.path.splitext(file)[0]
-                   and os.path.splitext(file)[-1].lower() in ['.ccd', '.sub', '.cue', '.iso', '.img', '.bin']]
-        for cdFile in cdFiles:
-            gGator.logger.log("      move %s to %s folder" % (cdFile, 'cd'))
-            shutil.move(os.path.join(imgmountDir, cdFile), gameCDDir)
-        # Move all music files except FLAC an FLA
-        musicFiles = [file for file in os.listdir(imgmountDir)
-                      if os.path.splitext(file)[-1].lower() in ['.ogg', '.mp3', '.wav']]
-        for musicFile in musicFiles:
-            gGator.logger.log("      move %s to %s folder" % (musicFile, 'cd'))
-            shutil.move(os.path.join(imgmountDir, musicFile), gameCDDir)
-        # Delete all FLAC and FLA files
-        flacFiles = [file for file in os.listdir(imgmountDir)
-                     if os.path.splitext(file)[-1].lower() in ['.flac', '.fla']]
-        for flacFile in flacFiles:
-            os.remove(os.path.join(imgmountDir, flacFile))
+        # Robustness guard: some games (notably multi-disc titles whose source
+        # bats reference CD images via a path layout the extractor flattens, e.g.
+        # eXoDOS v6 comconra/WC2DLX) resolve to a directory that does not exist on
+        # disk. Listing it would raise FileNotFoundError and abort the WHOLE game
+        # conversion. Warn and emit the imgset line on a best-effort basis instead
+        # of crashing; such games are flagged for a per-game override.
+        if not os.path.isdir(imgmountDir):
+            gGator.logger.log(
+                '      <WARNING> CD source dir not found for "%s" (%s); '
+                'emitting imgset line without moving CD files - this game likely '
+                'needs a per-game override' % (gGator.game, imgmountDir),
+                gGator.logger.WARNING)
+        else:
+            cdFiles = [file for file in os.listdir(imgmountDir) if
+                       os.path.splitext(ntpath.basename(localPath))[0] == os.path.splitext(file)[0]
+                       and os.path.splitext(file)[-1].lower() in ['.ccd', '.sub', '.cue', '.iso', '.img', '.bin']]
+            for cdFile in cdFiles:
+                gGator.logger.log("      move %s to %s folder" % (cdFile, 'cd'))
+                shutil.move(os.path.join(imgmountDir, cdFile), gameCDDir)
+            # Move all music files except FLAC an FLA
+            musicFiles = [file for file in os.listdir(imgmountDir)
+                          if os.path.splitext(file)[-1].lower() in ['.ogg', '.mp3', '.wav']]
+            for musicFile in musicFiles:
+                gGator.logger.log("      move %s to %s folder" % (musicFile, 'cd'))
+                shutil.move(os.path.join(imgmountDir, musicFile), gameCDDir)
+            # Delete all FLAC and FLA files
+            flacFiles = [file for file in os.listdir(imgmountDir)
+                         if os.path.splitext(file)[-1].lower() in ['.flac', '.fla']]
+            for flacFile in flacFiles:
+                os.remove(os.path.join(imgmountDir, flacFile))
         # Modify and return command line
         if letter == 'd':
             return 'imgset ide10 "/cd/' + gGator.game + '/' + ntpath.basename(localPath) + '"\n'

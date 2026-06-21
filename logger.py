@@ -1,5 +1,6 @@
 import queue
 import re
+import sys
 
 
 class Logger:
@@ -24,10 +25,21 @@ class Logger:
     def log(self, msg, level=INFO, replaceLine=False):
         self.log_queue.put([level, replaceLine, msg.rstrip('\n').strip('\r')])
         if not replaceLine:
-            print(msg.rstrip('\n'))
+            self.__safePrint__(msg.rstrip('\n'))
         else:
             #no reason we can't have two \r incase its missing
-            print(msg.rstrip('\n'), end='\r')
+            self.__safePrint__(msg.rstrip('\n'), end='\r')
+
+    # Console-safe print: headless Windows consoles default to cp1252 and raise
+    # UnicodeEncodeError on the many non-ASCII game titles in the collection.
+    # Fall back to an encodable representation instead of crashing the whole run.
+    @staticmethod
+    def __safePrint__(msg, end='\n'):
+        try:
+            print(msg, end=end)
+        except UnicodeEncodeError:
+            enc = (sys.stdout.encoding or 'ascii')
+            print(msg.encode(enc, errors='replace').decode(enc, errors='replace'), end=end)
 
     #log a subprocess call
     def logProcess(self, process):
