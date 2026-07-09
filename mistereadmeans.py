@@ -11,7 +11,7 @@ Layout matches the frozen samples in
 * Info block: Year/Source/Players/Mode, Genre, Developer, Publisher
 * Notes body (wrap 76, max 18 lines; truncate with marker)
 * Series footer (optional)
-* CRLF, CP437, trailing reset; no BOM
+* LF-only newlines (not CRLF — MyMenu double-spaces CRLF), CP437, trailing reset; no BOM
 
 Pure stdlib — no new packages.
 """
@@ -344,8 +344,10 @@ def render_readme_ans(
     # First line gets clear prefix glued to top border
     lines[0] = prefix + lines[0]
 
-    # Join with CRLF, trailing newline, ensure reset present
-    raw = "\r\n".join(lines) + "\r\n"
+    # Line endings: LF only (0x0A). Frozen A8 samples and MyMenu's ANSI
+    # viewer treat CRLF as *two* advances (CR + LF), which shows as a blank
+    # line after every row. DOS batch files still use CRLF elsewhere.
+    raw = "\n".join(lines) + "\n"
     # Encode CP437 with replace; log replacements via warnings when non-encodable remain
     encoded = raw.encode("cp437", errors="replace")
     # Detect replacement chars that weren't intentional '?'
