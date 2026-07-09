@@ -3,34 +3,31 @@ import util
 import shutil
 import ntpath
 import platform
-import lists
 import misterbatrules
+import misteroverrides
 from PIL import ImageFont
 from PIL import Image
 from PIL import ImageDraw
 
 
-# Removed unused CDs
-def removeUnusedCds(game, localGameDataOutputDir, logger):
-    unusedCds = {
-        'heromm2d': '.\\CD\\Heroes of Might and Magic 2.cue',
-        'VirtSqua': '.\\cd\\V_SQUAD.CUE',
-        'SSN21Se': '.\\cd\\SEAWOLF___.cue',
-        'FIFAInte': '.\\CD\\FIFA.International.Soccer.cue',
-        'vengexca': '..\\spirexc\\CD\\SPIRIT.cue',
-        'whalvoy2': '..\\whalvoy1\\cd\\whalvoy1.cue',
-        'WC2DLX': '..\\WC\\cd\\WC.cue'
-    }
-    if game in unusedCds:
-        cue = os.path.join(localGameDataOutputDir, util.localOSPath(unusedCds[game]))
+# Removed unused CDs (paths come from data/mister/overrides.csv)
+def removeUnusedCds(game, localGameDataOutputDir, logger, scriptDir=None):
+    if scriptDir is None:
+        # Best-effort: walk up from this module to the converter root.
+        scriptDir = os.path.dirname(os.path.abspath(__file__))
+    paths = misteroverrides.unused_cd_paths(scriptDir, game, logger=logger)
+    if not paths:
+        return
+    for rel in paths:
+        cue = os.path.join(localGameDataOutputDir, util.localOSPath(rel))
         cueDir = os.path.dirname(cue)
-        # The unusedCds map carries v5-era relative paths (e.g. "..\\WC\\cd") that
+        # The unused_cd map carries v5-era relative paths (e.g. "..\\WC\\cd") that
         # may not exist in the eXoDOS v6 extracted layout. Skip gracefully rather
         # than crashing the whole game conversion on a missing cleanup target.
         if not os.path.isdir(cueDir):
             logger.log("      no unused-cd cleanup dir for %s (%s); skipping"
                        % (game, cueDir), logger.WARNING)
-            return
+            continue
         cdFiles = [file for file in os.listdir(cueDir) if
                    os.path.splitext(ntpath.basename(cue))[0] == os.path.splitext(file)[0]
                    and os.path.splitext(file)[-1].lower() in ['.ccd', '.sub', '.cue', '.iso', '.img', '.bin']]
@@ -62,9 +59,12 @@ def batsAndMounts(gGator):
             elif line.lower() in ['d:', 'f:', 'g:', 'h:', 'i:', 'j:', 'k:']:
                 launchBat.write('f:\n')
             elif line.lower() == 'call run' or line.lower() == 'call run.bat':
-                if gGator.game in lists.gamesWithRunBatHandling:
+                script_dir = getattr(gGator, 'scriptDir', os.path.dirname(os.path.abspath(__file__)))
+                if misteroverrides.needs_run_bat_handling(script_dir, gGator.game, logger=gGator.logger):
                     handleRunBat(gGator)
-                launchBat.write(line)
+                # Always terminate the line — missing CRLF here produced the
+                # classic "call runcall run" / "call run.batcall run.bat" bug.
+                launchBat.write(line + '\n')
             else:
                 launchBat.write(line + '\n')
     # Change imgmount iso command to imgset ide10 cdgames/gamefolder/game.iso
@@ -77,10 +77,10 @@ def batsAndMounts(gGator):
     os.remove(os.path.join(gGator.getLocalGameOutputDir(), 'dosbox.bat'))
 
     # Phase D5 rules engine: rewrite imgset -> CALL imgtry with CHD-fallback chain (R1),
-    # drop dummy directory-unmount lines. See misterbatrules.py for the rule set.
+    # pause -> @jchoice (R2), drop dummy directory-unmount lines.
     # Applied to all generated/cloned bats; R1 only fires on imgset lines so eXoDOS
     # source bats without imgset (most of them) pass through untouched.
-    for bat_name in ('1_Start.bat', 'run.bat'):
+    for bat_name in ('1_Start.bat', '3_Setup.bat', 'run.bat'):
         bat_path = os.path.join(gGator.getLocalGameOutputDir(), bat_name)
         if not os.path.isfile(bat_path):
             # run.bat for many games is in the data subdir, not the game output root
@@ -277,7 +277,18 @@ def convertCD(localPath, gGator, letter='d'):
                          if os.path.splitext(file)[-1].lower() in ['.flac', '.fla']]
             for flacFile in flacFiles:
                 os.remove(os.path.join(imgmountDir, flacFile))
-        # Modify and return command line
+        # Modify and return command line. Optional mount_other_game_cd override
+        # redirects the mount path to another title's disc (Top300 prior-game pattern).
+        script_dir = getattr(gGator, 'scriptDir', os.path.dirname(os.path.abspath(__file__)))
+        other = misteroverrides.mount_other_game_cd(script_dir, gGator.game, logger=gGator.logger)
+        if other:
+            # payload = "otherDosname/filename.ext"
+            gGator.logger.log(
+                '      override mount_other_game_cd -> /cd/%s' % other)
+            rel = other.lstrip('/')
+            if letter == 'd':
+                return 'imgset ide10 "/cd/' + rel + '"\n'
+            return 'imgset ide11 "/cd/' + rel + '"\n'
         if letter == 'd':
             return 'imgset ide10 "/cd/' + gGator.game + '/' + ntpath.basename(localPath) + '"\n'
         else:
@@ -368,7 +379,7 @@ def createSetupBat(gGator):
     setupBat.write('\n')
     setupBat.write(':sound3\n')
     setupBat.write('call sound.com\n')
-    setupBat.write('gotto :END\n')
+    setupBat.write('goto :END\n')
     setupBat.write('\n')
     setupBat.write(':setup1\n')
     setupBat.write('call setup.exe\n')

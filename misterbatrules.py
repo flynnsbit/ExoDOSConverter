@@ -7,9 +7,12 @@ Rules are composed via apply_rules_to_lines() / apply_rules_to_file().
 Current rules:
     R1  imgset -> CALL imgtry with CHD-fallback chain
         (drops dummy "/cd/<game>/d" unmount lines that become redundant)
+    R2  pause -> @jchoice (joystick-friendly any-key prompt)
+
+Per-game edge cases live in data/mister/overrides.csv (see misteroverrides.py),
+not in this module.
 
 Future rules (per plan.md):
-    R2  pause -> @jchoice (Phase D + overrides.csv)
     R4  @echo off prologue (already converter default)
     R5  multi-choice sound config picker (jchoice /C:...) -- from F4 v2 surfaced
 

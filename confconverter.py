@@ -180,10 +180,22 @@ class ConfConverter:
                 retroDosboxBat.write(self.commandHandler.handleBoot(cmdline.rstrip('\n\r ')))
             elif cmdline.lower().rstrip(' \n\r') == 'call run' or cmdline.lower().rstrip(' \n\r') == 'call run.bat':
                 self.logger.log("    <WARNING> game uses call run.bat", self.logger.WARNING)
-                if gGator.game in lists.gamesWithRunBatHandling:
+                try:
+                    import misteroverrides
+                    script_dir = getattr(gGator, 'scriptDir', None) or self.scriptDir
+                    needs = misteroverrides.needs_run_bat_handling(
+                        script_dir, gGator.game, logger=self.logger
+                    )
+                except Exception:
+                    needs = gGator.game in lists.gamesWithRunBatHandling
+                if needs:
                     self.__handleRunBat__(gGator)
                 self.__handlePotentialSubFile__(cmdline, gGator, [], whereWeAt)
-                retroDosboxBat.write(cmdline)
+                # Ensure newline so adjacent lines never concatenate.
+                if not cmdline.endswith('\n'):
+                    retroDosboxBat.write(cmdline.rstrip('\r\n') + '\n')
+                else:
+                    retroDosboxBat.write(cmdline)
             else:
                 self.__handlePotentialSubFile__(cmdline, gGator, [], whereWeAt)
                 retroDosboxBat.write(cmdline)

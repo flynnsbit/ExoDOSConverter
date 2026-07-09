@@ -42,9 +42,20 @@ VHD files are gitignored. Never commit `.vhd` (>100 MB breaks GitHub push).
 
 ## Open backlog
 
-- `data/mister/overrides.csv` for remaining Top300 R-new diffs
+- Expand `data/mister/overrides.csv` with more F4 R-new / R-game-specific rows
+  (prior-game CD families, inline launchers, multi-choice R5 menu pattern)
 - Native PC PicoIDE conversion type
-- Optional: parse Source/MaxPlayers/PlayMode/Series into DosGame for richer README.ANS
+
+## overrides.csv
+
+`data/mister/overrides.csv` is the **only** place for per-game MiSTer edge cases
+(no new Python dicts). Loaded by `misteroverrides.py`.
+
+| override_type | payload | effect |
+|---|---|---|
+| `unused_cd` | relative cue path | delete unused companion media |
+| `run_bat_handling` | (empty) | special-case `run.bat` rewrite |
+| `mount_other_game_cd` | `otherDos/file.ext` | CD mount path → `/cd/otherDos/file.ext` |
 
 ## dosforge VHD path (Phase C)
 

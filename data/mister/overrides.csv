@@ -1,0 +1,43 @@
+# MiSTer per-game overrides (Phase D5/D6).
+# Columns: dosname,override_type,payload
+# Types: unused_cd | run_bat_handling | mount_other_game_cd
+#        | force_root_install | force_mister_include | force_mister_exclude
+# dosname is the eXoDOS short folder id (case-insensitive).
+# Lines starting with # are comments.
+#
+# mount_other_game_cd payload = otherDosname/filename.ext
+#   (Top300 pattern: this game's launcher mounts a prior title's disc.)
+
+dosname,override_type,payload
+
+# --- unused_cd (migrated from mister.removeUnusedCds) ---
+heromm2d,unused_cd,.\CD\Heroes of Might and Magic 2.cue
+VirtSqua,unused_cd,.\cd\V_SQUAD.CUE
+SSN21Se,unused_cd,.\cd\SEAWOLF___.cue
+FIFAInte,unused_cd,.\CD\FIFA.International.Soccer.cue
+vengexca,unused_cd,..\spirexc\CD\SPIRIT.cue
+whalvoy2,unused_cd,..\whalvoy1\cd\whalvoy1.cue
+WC2DLX,unused_cd,..\WC\cd\WC.cue
+
+# --- run_bat_handling (migrated from lists.gamesWithRunBatHandling) ---
+bisle2,run_bat_handling,
+Blood,run_bat_handling,
+Carmaged,run_bat_handling,
+comcon,run_bat_handling,
+comconra,run_bat_handling,
+CrypticP,run_bat_handling,
+lemm3,run_bat_handling,
+LewLeon,run_bat_handling,
+MechW2,run_bat_handling,
+rarkani1,run_bat_handling,
+Resurrec,run_bat_handling,
+stjudgec,run_bat_handling,
+heromm2d,run_bat_handling,
+longbow,run_bat_handling,
+
+# --- mount_other_game_cd (F4 v4 prior-title disc pattern) ---
+# Discworld 2 launches mount Discworld 1 media in Top300 hand-fixes.
+dw2,mount_other_game_cd,dw1/discwor.iso
+# King's Quest V often cds into KQ1 install tree on Top300 (path rewrite).
+# Filename kept as converter would emit; folder redirected.
+KQ5,mount_other_game_cd,KQ1/king'sq.cue
