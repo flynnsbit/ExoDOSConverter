@@ -9,6 +9,7 @@ import dosboxconfv6
 from zipfile import ZipFile
 import mymenupacker
 import ao486vhd
+import dosforgevhd
 from gamegenerator import GameGenerator
 
 
@@ -275,13 +276,37 @@ class ExoConverter:
                                     os.path.join(os.path.join(self.outputDir, "ao486")))
 
                     self.logger.log("  Building ao486 VHD output")
-                    vhdBuilder = ao486vhd.Ao486VhdBuilder(
-                        self.scriptDir,
-                        self.outputDir,
-                        self.collectionVersion,
-                        self.logger,
+                    useDosforge = dosforgevhd.DosforgeVhdBuilder.shouldUse(
                         self.conversionConf
                     )
+                    if useDosforge:
+                        self.logger.log(
+                            '  Using dosforge VHD builder (set misterUseDosforge=false '
+                            'to force template/ao486vhd path)'
+                        )
+                        vhdBuilder = dosforgevhd.DosforgeVhdBuilder(
+                            self.scriptDir,
+                            self.outputDir,
+                            self.collectionVersion,
+                            self.logger,
+                            self.conversionConf,
+                        )
+                    else:
+                        if dosforgevhd.DosforgeVhdBuilder.isAvailable(self.conversionConf):
+                            self.logger.log(
+                                '  Using template ao486vhd builder (misterUseDosforge disabled)'
+                            )
+                        else:
+                            self.logger.log(
+                                '  Using template ao486vhd builder (dosforge not on PATH)'
+                            )
+                        vhdBuilder = ao486vhd.Ao486VhdBuilder(
+                            self.scriptDir,
+                            self.outputDir,
+                            self.collectionVersion,
+                            self.logger,
+                            self.conversionConf,
+                        )
                     if not vhdBuilder.build():
                         self.logger.log(
                             '  <ERROR> ao486 VHD generation failed (frontend pack was still generated)',

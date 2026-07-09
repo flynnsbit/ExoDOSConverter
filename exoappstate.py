@@ -270,6 +270,14 @@ class ExoAppState:
 
         if conversionType == util.mister:
             conversionConf['preExtractGames'] = False
+            # dosforge VHD builder knobs (see dosforgevhd.py). Optional conf keys;
+            # missing values fall back to module defaults.
+            conversionConf['misterUseDosforge'] = self.getValue('misterUseDosforge') or 'auto'
+            conversionConf['misterDosforgeExecutable'] = self.getValue('misterDosforgeExecutable') or ''
+            conversionConf['misterBootMode'] = self.getValue('misterBootMode') or 'auto'
+            conversionConf['misterDosInstallProfile'] = self.getValue('misterDosInstallProfile') or 'full'
+            conversionConf['misterDosforgeBootAssets'] = self.getValue('misterDosforgeBootAssets') or ''
+            conversionConf['misterSaveBufferMiB'] = self.getValue('misterSaveBufferMiB') or '64'
 
         if conversionType in [util.retrobat, util.batocera, util.recalbox]:
             useLongFolderNames = self.getBool('longGameFolder')
