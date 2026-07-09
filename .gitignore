@@ -13,3 +13,6 @@ name_mapping.txt
 ExoDOSConverter.exe
 main.spec
 **/build
+out/
+# Local/dev-only trees (templates, MartyPC experiments) — never ship
+vhdtemplate/
