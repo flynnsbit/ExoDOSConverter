@@ -319,6 +319,22 @@ class GameGenerator:
         autorunBat.write('call 1_Start.bat\n')
         autorunBat.close()
 
+        # MyMenu preview card (A8 / Phase D3a). Optional conf gate.
+        generateReadme = str(
+            self.conversionConf.get('misterGenerateReadmeAns', 'true')
+        ).strip().lower()
+        if generateReadme not in ('0', 'false', 'no', 'off'):
+            try:
+                import mistereadmeans
+                mistereadmeans.write_readme_ans(
+                    targetGameOutputDir, self.metadata, logger=self.logger
+                )
+            except Exception as exc:
+                self.logger.log(
+                    '    <WARNING> README.ANS generation failed: %s' % exc,
+                    self.logger.WARNING,
+                )
+
     # Post-conversion for openDingux for a given game
     def __postConversionForOpenDingux__(self):
         self.logger.log("  opendingux post-conversion")

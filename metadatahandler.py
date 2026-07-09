@@ -10,7 +10,8 @@ from xml.dom import minidom
 from genre_mapping import mapGenres, Genre
 
 DosGame = collections.namedtuple('DosGame',
-                                 'dosname metadataname name genres publisher developer year frontPic manual desc')
+                                 'dosname metadataname name genres publisher developer year frontPic manual desc '
+                                 'source maxplayers playmode series')
 
 
 # Metadata exporting
@@ -80,8 +81,16 @@ class MetadataHandler:
                         manualpath = util.localOSPath(os.path.join(self.exoCollectionDir, manual)) if manual is not None else None
                         cachePic = util.findPics(name, self.cache)
                         frontPic = cachePic if cachePic is not None else util.findPics(dosname, self.cache)
-                        metadata = DosGame(dosname, metadataname, name, genres, publisher, developer, releasedate, frontPic,
-                                           manualpath, desc)
+                        # Extra fields for MiSTer README.ANS (A8). Safe None when absent.
+                        source = self.__getNode__(g, 'Source')
+                        maxplayers = self.__getNode__(g, 'MaxPlayers')
+                        playmode = self.__getNode__(g, 'PlayMode')
+                        series = self.__getNode__(g, 'Series')
+                        metadata = DosGame(
+                            dosname, metadataname, name, genres, publisher, developer,
+                            releasedate, frontPic, manualpath, desc,
+                            source, maxplayers, playmode, series,
+                        )
                         metadatas[metadata.dosname.lower()] = metadata
 
                     except:

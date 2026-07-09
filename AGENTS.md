@@ -42,9 +42,9 @@ VHD files are gitignored. Never commit `.vhd` (>100 MB breaks GitHub push).
 
 ## Open backlog
 
-- README.ANS metadata generator (`mistereadmeans.py`)
 - `data/mister/overrides.csv` for remaining Top300 R-new diffs
 - Native PC PicoIDE conversion type
+- Optional: parse Source/MaxPlayers/PlayMode/Series into DosGame for richer README.ANS
 
 ## dosforge VHD path (Phase C)
 

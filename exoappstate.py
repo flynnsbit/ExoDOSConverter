@@ -278,6 +278,7 @@ class ExoAppState:
             conversionConf['misterDosInstallProfile'] = self.getValue('misterDosInstallProfile') or 'full'
             conversionConf['misterDosforgeBootAssets'] = self.getValue('misterDosforgeBootAssets') or ''
             conversionConf['misterSaveBufferMiB'] = self.getValue('misterSaveBufferMiB') or '64'
+            conversionConf['misterGenerateReadmeAns'] = self.getValue('misterGenerateReadmeAns') or 'true'
 
         if conversionType in [util.retrobat, util.batocera, util.recalbox]:
             useLongFolderNames = self.getBool('longGameFolder')
