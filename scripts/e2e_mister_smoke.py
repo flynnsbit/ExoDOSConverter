@@ -83,7 +83,7 @@ def main(argv=None) -> int:
     state.setValue("misterLauncher", "mymenu")
     state.setValue("misterUseDosforge", "true")
     state.setValue("misterBootMode", "msdos622")
-    state.setValue("misterDosInstallProfile", "minimal")
+    state.setValue("misterDosInstallProfile", "full")
     state.setValue("misterGenerateReadmeAns", "true")
     if args.dosforge:
         state.setValue("misterDosforgeExecutable", args.dosforge)
@@ -136,7 +136,7 @@ def main(argv=None) -> int:
         conf["misterUseDosforge"] = "true"
         conf["misterBootMode"] = state.getValue("misterBootMode") or "msdos622"
         conf["misterDosInstallProfile"] = (
-            state.getValue("misterDosInstallProfile") or "minimal"
+            state.getValue("misterDosInstallProfile") or "full"
         )
         conf["misterGenerateReadmeAns"] = "true"
         exe = state.getValue("misterDosforgeExecutable")
@@ -191,7 +191,8 @@ def main(argv=None) -> int:
     checks.append(("MYMENU dir", "MYMENU" in out.upper() or "mymenu" in out.lower()))
     checks.append(("GAMES dir", "GAMES" in out.upper()))
     checks.append(("AUTOEXEC.BAT", "AUTOEXEC" in out.upper()))
-    checks.append(("AUTORUN_EDC", "AUTORUN" in out.upper() or "AUTORU" in out.upper()))
+    checks.append(("RUNMENU.BAT 8.3", "RUNMENU" in out.upper()))
+    checks.append(("CONFIG.SYS present", "CONFIG" in out.upper()))
     # COMMAND.COM must be a real dosforge install, not a 0-byte support-zip clobber.
     cmd_tmp = os.path.join(out_root, "_check_command.com")
     code_c, _o, _e = df("get", vhd, "::/COMMAND.COM", cmd_tmp)
@@ -205,14 +206,26 @@ def main(argv=None) -> int:
     code, out, err = df("cat", vhd, "::/AUTOEXEC.BAT")
     print("--- AUTOEXEC.BAT ---")
     print(out or err)
-    checks.append(("AUTOEXEC calls AUTORUN_EDC", "AUTORUN_EDC" in (out or "").upper()))
+    ae = (out or "").upper()
+    checks.append(
+        (
+            "AUTOEXEC 8.3 menu launch",
+            "RUNMENU.BAT" in ae or "MYMENU" in ae or "MENU.BAT" in ae,
+        )
+    )
+    checks.append(("No long AUTORUN_EDC name", "AUTORUN_EDC" not in ae))
 
-    code, out, err = df("cat", vhd, "::/AUTORUN_EDC.BAT")
-    print("--- AUTORUN_EDC.BAT ---")
+    code, out, err = df("cat", vhd, "::/RUNMENU.BAT")
+    print("--- RUNMENU.BAT ---")
     print(out or err)
     checks.append(
-        ("MyMenu launch", "MYMENU" in (out or "").upper() or "MENU.BAT" in (out or "").upper())
+        ("RUNMENU MyMenu launch", "MYMENU" in (out or "").upper() or "MENU.BAT" in (out or "").upper())
     )
+
+    code, out, err = df("cat", vhd, "::/CONFIG.SYS")
+    print("--- CONFIG.SYS ---")
+    print(out or err)
+    checks.append(("CONFIG.SYS SHELL /P", "SHELL=" in (out or "").upper() and "/P" in (out or "").upper()))
 
     code, out, err = df("ls", vhd, "::/GAMES")
     print("--- ls ::/GAMES ---")

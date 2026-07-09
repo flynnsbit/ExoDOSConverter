@@ -57,8 +57,9 @@ Exit 0 means all layout checks passed (MyMenu, AUTOEXEC, GAMES, autorun, README.
 
 | Path | Role |
 |------|------|
-| `C:\AUTOEXEC.BAT` | Calls `AUTORUN_EDC.BAT` |
-| `C:\AUTORUN_EDC.BAT` | Loads DOSLFN (if present), runs `MYMENU\MENU.BAT` |
+| `C:\AUTOEXEC.BAT` | 8.3-only paths; calls `RUNMENU.BAT` / MyMenu |
+| `C:\RUNMENU.BAT` | Loads `DOSLFN.COM`, runs `MYMENU\MENU.BAT` (loop) |
+| `C:\CONFIG.SYS` | `SHELL=COMMAND.COM /P` (+ HIMEM when full profile) |
 | `C:\MYMENU\` | MyMenu binaries + `MYMENU.INI` |
 | `C:\GAMES\<Title>\` | Game files, `autorun.bat`, `1_Start.bat`, `README.ANS` |
 | `C:\COMMAND.COM` | Non-zero (~54 KB for MS-DOS 6.22) |

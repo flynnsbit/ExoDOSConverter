@@ -218,21 +218,30 @@ class Ao486VhdBuilder:
             zipFile.extractall(path=stagingRoot)
 
     def __writeAutorunScript__(self, stagingRoot, mode, gameFolders):
-        scriptPath = os.path.join(stagingRoot, 'AUTORUN_EDC.BAT')
+        # MUST be a valid 8.3 name. AUTORUN_EDC.BAT is 11 chars and is
+        # invisible to DOS without an LFN driver — MiSTer then drops to C:\.
+        scriptPath = os.path.join(stagingRoot, 'RUNMENU.BAT')
         lines = ['@ECHO OFF']
 
+        # Payload ships DOSLFN.COM (not DOSLFNM.COM). Try both.
+        lines.append('IF EXIST C:\\MYMENU\\UTILS\\DOSLFN.COM C:\\MYMENU\\UTILS\\DOSLFN.COM')
         lines.append('IF EXIST C:\\MYMENU\\UTILS\\DOSLFNM.COM C:\\MYMENU\\UTILS\\DOSLFNM.COM')
+        lines.append('IF EXIST C:\\UTILS\\DOSLFN.COM C:\\UTILS\\DOSLFN.COM')
 
         if mode == 'single':
+            # Quoted path needs LFN for titles like "Tris (1997)".
             lines.extend([
                 'CD "C:\\GAMES\\%s"' % gameFolders[0],
                 'IF EXIST AUTORUN.BAT CALL AUTORUN.BAT',
                 'IF NOT EXIST AUTORUN.BAT IF EXIST 1_START.BAT CALL 1_START.BAT',
             ])
         else:
+            # Loop so exiting MyMenu does not dump the user at a bare C:\.
             lines.extend([
+                ':MYMENU',
                 'IF EXIST C:\\MYMENU\\MENU.BAT CALL C:\\MYMENU\\MENU.BAT',
                 'IF NOT EXIST C:\\MYMENU\\MENU.BAT IF EXIST C:\\MYMENU\\MYMENU.EXE C:\\MYMENU\\MYMENU.EXE C:\\GAMES',
+                'GOTO MYMENU',
             ])
 
         self.__writeDosTextFile__(scriptPath, lines)
@@ -242,8 +251,11 @@ class Ao486VhdBuilder:
         if os.path.exists(menuBatPath):
             self.__writeDosTextFile__(menuBatPath, [
                 '@echo off',
+                'if exist c:\\mymenu\\utils\\doslfn.com c:\\mymenu\\utils\\doslfn.com',
                 'if exist c:\\mymenu\\utils\\doslfnm.com c:\\mymenu\\utils\\doslfnm.com',
-                'c:\\mymenu\\mymenu.exe c:\\games',
+                'c:',
+                'cd \\mymenu',
+                'mymenu.exe c:\\games',
             ])
 
         iniPath = os.path.join(mymenuDir, 'MYMENU.INI')

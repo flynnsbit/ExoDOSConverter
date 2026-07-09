@@ -275,6 +275,7 @@ class ExoAppState:
             conversionConf['misterUseDosforge'] = self.getValue('misterUseDosforge') or 'auto'
             conversionConf['misterDosforgeExecutable'] = self.getValue('misterDosforgeExecutable') or ''
             conversionConf['misterBootMode'] = self.getValue('misterBootMode') or 'auto'
+            # full = C:\DOS tools + HIMEM (needed for DOSLFN/MyMenu on MiSTer)
             conversionConf['misterDosInstallProfile'] = self.getValue('misterDosInstallProfile') or 'full'
             conversionConf['misterDosforgeBootAssets'] = self.getValue('misterDosforgeBootAssets') or ''
             conversionConf['misterSaveBufferMiB'] = self.getValue('misterSaveBufferMiB') or '64'

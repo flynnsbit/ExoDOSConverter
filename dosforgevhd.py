@@ -151,8 +151,8 @@ class DosforgeVhdBuilder:
                 self._helper.__buildStagingTree__(stagingRoot, gameFolders, mode)
                 # Drop anything that would overwrite dosforge OS bootstrap.
                 self._stripProtectedRootSystemFiles(stagingRoot)
-                # Root AUTOEXEC that survives dosforge create payload copy.
-                self._writeRootAutoexec(stagingRoot)
+                # 8.3-safe AUTOEXEC + CONFIG.SYS (see MiSTer C:\ prompt bug).
+                self._writeRootBootFiles(stagingRoot, mode)
 
                 stagedBytes, requiredFree = self._helper.__calculateRequiredFreeBytes__(
                     stagingRoot
@@ -252,20 +252,50 @@ class DosforgeVhdBuilder:
                     self.logger.WARNING,
                 )
 
-    def _writeRootAutoexec(self, stagingRoot):
-        """Write C:\\AUTOEXEC.BAT so payload copy replaces dosforge defaults.
+    def _writeRootBootFiles(self, stagingRoot, mode):
+        """Write 8.3-safe AUTOEXEC.BAT (+ CONFIG.SYS) for MiSTer boot.
 
-        dosforge create installs a minimal AUTOEXEC then copies the custom
-        payload on top — a root AUTOEXEC.BAT in the payload wins.
+        Critical: never CALL a long-named bat (e.g. AUTORUN_EDC.BAT) before
+        DOSLFN is loaded — MS-DOS 6.22 without LFN will not find it and will
+        drop straight to ``C:\\>``.
         """
-        lines = [
+        autoexec = [
             '@ECHO OFF',
             'PROMPT $P$G',
-            'PATH C:\\DOS;C:\\FDOS;C:\\FDOS\\BIN;C:\\UTILS;C:\\MYMENU;C:\\MYMENU\\UTILS;%PATH%',
-            'IF EXIST C:\\AUTORUN_EDC.BAT CALL C:\\AUTORUN_EDC.BAT',
+            # Avoid %PATH% expansion quirks on a virgin DOS environment.
+            'PATH C:\\;C:\\DOS;C:\\FDOS;C:\\FDOS\\BIN;C:\\UTILS;C:\\MYMENU;C:\\MYMENU\\UTILS',
+            # Prefer RUNMENU.BAT (8.3). Fall back to inlined MyMenu launch.
+            'IF EXIST C:\\RUNMENU.BAT CALL C:\\RUNMENU.BAT',
+            'IF EXIST C:\\MYMENU\\UTILS\\DOSLFN.COM C:\\MYMENU\\UTILS\\DOSLFN.COM',
+            'IF EXIST C:\\MYMENU\\MENU.BAT CALL C:\\MYMENU\\MENU.BAT',
+            'IF EXIST C:\\MYMENU\\MYMENU.EXE C:\\MYMENU\\MYMENU.EXE C:\\GAMES',
         ]
-        path = os.path.join(stagingRoot, 'AUTOEXEC.BAT')
-        self._helper.__writeDosTextFile__(path, lines)
+        if mode == 'multi':
+            # If MyMenu/RUNMENU returns, re-enter instead of a bare prompt.
+            autoexec.extend([
+                ':REMENU',
+                'IF EXIST C:\\RUNMENU.BAT CALL C:\\RUNMENU.BAT',
+                'IF EXIST C:\\MYMENU\\MENU.BAT CALL C:\\MYMENU\\MENU.BAT',
+                'GOTO REMENU',
+            ])
+        self._helper.__writeDosTextFile__(
+            os.path.join(stagingRoot, 'AUTOEXEC.BAT'), autoexec
+        )
+
+        # Explicit permanent shell so COMMAND.COM always processes AUTOEXEC.
+        # Do NOT reference HIMEM.SYS here: dosforge's full profile does not
+        # currently stage HIMEM into C:\DOS (it lives as HIMEM.SY_ on the
+        # install media). A missing DEVICE= line aborts with "Press any key"
+        # on MiSTer and looks like a failed autostart.
+        config_lines = [
+            'FILES=40',
+            'BUFFERS=30',
+            'STACKS=9,256',
+            'SHELL=C:\\COMMAND.COM C:\\ /E:1024 /P',
+        ]
+        self._helper.__writeDosTextFile__(
+            os.path.join(stagingRoot, 'CONFIG.SYS'), config_lines
+        )
 
     def _pickSizeAndFormat(self, stagedBytes, requiredFree):
         """Return (size_bytes, fat_format, boot_mode)."""
@@ -338,6 +368,7 @@ class DosforgeVhdBuilder:
         bootMode,
         payloadDir,
     ):
+        # Default full so C:\DOS\HIMEM.SYS exists for DOSLFN / MyMenu.
         profile = str(
             self.conversionConf.get('misterDosInstallProfile', 'full') or 'full'
         ).strip().lower()
