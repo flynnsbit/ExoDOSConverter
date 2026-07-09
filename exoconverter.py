@@ -295,34 +295,7 @@ class ExoConverter:
                 shutil.rmtree(destGame)
             shutil.copytree(sourceDir, destGame)
         self.logger.log("  copied unpacked game -> %s" % destGame)
-
-        # For win3x games, all files / dir / etc in game.pc/game should be moved to game.pc/ and sub game.pc/game deleted
-        # do not use getLocalGameDataOutputDir as game data are in subdir at that point
-        if gGator.isWin3x():
-            # Needs to rename sub game dir first then move content to .pc folder , then delete sub game dir
-            gameOutputDir = gGator.getLocalGameOutputDir()
-            gameSubDir = self.__resolveExtractedGameSubDir__(gameOutputDir, gGator.game)
-            if gameSubDir is None:
-                self.logger.log(
-                    '  <WARNING> Could not find extracted game subdir "%s" in %s; keeping extracted layout as-is'
-                    % (gGator.game, gameOutputDir),
-                    self.logger.WARNING
-                )
-                return
-
-            subDirTempName = gGator.game + '-tempEDC'
-            subDirTempPath = os.path.join(gameOutputDir, subDirTempName)
-            suffix = 2
-            while os.path.exists(subDirTempPath):
-                subDirTempPath = os.path.join(gameOutputDir, subDirTempName + '-' + str(suffix))
-                suffix += 1
-
-            os.rename(gameSubDir, subDirTempPath)
-            for gameFile in os.listdir(subDirTempPath):
-                shutil.move(os.path.join(subDirTempPath, gameFile), gameOutputDir)
-            # Check if it's empty !! a subdir might be named the same
-            if len(os.listdir(subDirTempPath)) == 0:
-                shutil.rmtree(subDirTempPath)
+        self.__flattenDosnameSubdirIfWin3x__(gGator)
 
     # Unzip game zip
     def __unzipGame__(self, gameZipPath, gGator):
@@ -336,6 +309,51 @@ class ExoConverter:
         if len(unzippedDirs) == 1 and unzippedDirs[0] != gGator.game and not gGator.isWin3x():
             self.logger.log("  fixing extracted dir %s to !dos name %s" % (unzippedDirs[0], gGator.game))
             os.rename(os.path.join(gGator.getLocalGameOutputDir(), unzippedDirs[0]), os.path.join(gGator.getLocalGameOutputDir(), gGator.game))
+        # isWin3x path: lift <dosname>/* to game root so CWD matches eXoDOS
+        # "mount c .\eXoDOS\<dosname>" (MyMenu starts at LFN root, not dosname).
+        self.__flattenDosnameSubdirIfWin3x__(gGator)
+
+    def __flattenDosnameSubdirIfWin3x__(self, gGator):
+        """Move game.pc/<dosname>/* up to game.pc/ when isWin3x() is True.
+
+        eXoDOS mounts C: at the dosname folder; on MiSTer/MyMenu the equivalent
+        is flattening that folder so 1_Start.bat at the LFN root finds the EXE.
+        Shared by zip extract and already-unpacked copy paths.
+        """
+        if not gGator.isWin3x():
+            return
+        # do not use getLocalGameDataOutputDir as game data are in subdir at that point
+        gameOutputDir = gGator.getLocalGameOutputDir()
+        gameSubDir = self.__resolveExtractedGameSubDir__(gameOutputDir, gGator.game)
+        if gameSubDir is None:
+            self.logger.log(
+                '  <WARNING> Could not find extracted game subdir "%s" in %s; keeping extracted layout as-is'
+                % (gGator.game, gameOutputDir),
+                self.logger.WARNING
+            )
+            return
+
+        # Already flat (payload files sit next to conf/bats at output root).
+        if os.path.abspath(gameSubDir) == os.path.abspath(gameOutputDir):
+            return
+
+        subDirTempName = gGator.game + '-tempEDC'
+        subDirTempPath = os.path.join(gameOutputDir, subDirTempName)
+        suffix = 2
+        while os.path.exists(subDirTempPath):
+            subDirTempPath = os.path.join(gameOutputDir, subDirTempName + '-' + str(suffix))
+            suffix += 1
+
+        self.logger.log(
+            "  flattening %s -> game root (win3x / eXoDOS mount-c semantics)"
+            % os.path.basename(gameSubDir)
+        )
+        os.rename(gameSubDir, subDirTempPath)
+        for gameFile in os.listdir(subDirTempPath):
+            shutil.move(os.path.join(subDirTempPath, gameFile), gameOutputDir)
+        # Check if it's empty !! a subdir might be named the same
+        if len(os.listdir(subDirTempPath)) == 0:
+            shutil.rmtree(subDirTempPath)
 
     @staticmethod
     def __resolveExtractedGameSubDir__(outputDir, expectedGameDir):

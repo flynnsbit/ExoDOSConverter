@@ -36,6 +36,60 @@ def removeUnusedCds(game, localGameDataOutputDir, logger, scriptDir=None):
             os.remove(os.path.join(cueDir, cdFile))
 
 
+def ensure_cwd_is_game_payload(gGator):
+    """If <dosname> still exists under the game folder, inject ``cd <dosname>``.
+
+    Safety net when zip flatten did not run. eXoDOS mounts C: at the dosname
+    folder; MyMenu starts with CWD at the LFN parent, so relative EXE lines in
+    1_Start.bat miss the payload without this cd.
+    """
+    game_root = gGator.getLocalGameOutputDir()
+    dosname = gGator.game
+    nested = os.path.join(game_root, dosname)
+    if not os.path.isdir(nested):
+        return
+    start_path = os.path.join(game_root, '1_Start.bat')
+    if not os.path.isfile(start_path):
+        return
+    with open(start_path, 'r', encoding='utf-8', errors='replace') as fh:
+        lines = fh.readlines()
+    # Already has a cd into dosname (any case, optional quotes)
+    for line in lines:
+        stripped = line.lstrip('@ \t').rstrip('\r\n')
+        if stripped.lower().startswith('cd '):
+            target = stripped[3:].strip().strip('"').strip("'")
+            # strip trailing \ or /
+            target = target.rstrip('\\/')
+            if target.lower() == dosname.lower() or target.lower() == '.\\' + dosname.lower():
+                return
+    # Insert after leading media / imgset lines so mounts stay at pack paths,
+    # then enter the game payload for relative EXEs and nested cds.
+    insert_at = 0
+    for i, line in enumerate(lines):
+        s = line.lstrip('@ \t').lower()
+        if (
+            s.startswith('imgset')
+            or s.startswith('call imgtry')
+            or s.startswith('imgmount')
+            or s.startswith('mount ')
+            or s.startswith('@jchoice')
+            or s.startswith('jchoice')
+            or s.strip() == ''
+            or s.startswith('rem ')
+            or s.startswith('echo ')
+        ):
+            insert_at = i + 1
+            continue
+        break
+    cd_line = 'cd %s\r\n' % dosname
+    lines.insert(insert_at, cd_line)
+    with open(start_path, 'w', encoding='utf-8', newline='') as fh:
+        fh.writelines(lines)
+    gGator.logger.log(
+        '      inject "cd %s" into 1_Start.bat (nested payload still present)' % dosname
+    )
+
+
 # Creates launch.bat and handles mount and imgmount paths
 def batsAndMounts(gGator):
     dosboxBat = open(os.path.join(gGator.getLocalGameOutputDir(), "dosbox.bat"), 'r')
@@ -75,6 +129,10 @@ def batsAndMounts(gGator):
     createSetupBat(gGator)
     createEditBat(gGator)
     os.remove(os.path.join(gGator.getLocalGameOutputDir(), 'dosbox.bat'))
+
+    # If flatten failed and payload still lives under <dosname>/, ensure 1_Start
+    # cds into it (MyMenu CWD is the LFN folder, not the dosname subfolder).
+    ensure_cwd_is_game_payload(gGator)
 
     # Phase D5 rules engine: rewrite imgset -> CALL imgtry with CHD-fallback chain (R1),
     # pause -> @jchoice (R2), drop dummy directory-unmount lines.
