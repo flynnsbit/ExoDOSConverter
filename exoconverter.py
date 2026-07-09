@@ -133,44 +133,72 @@ class ExoConverter:
         # subprocess.call("cmd /C (echo Y&echo F&echo N) | Install.bat", cwd=os.path.join(self.gamesDosDir, game),
         #                 shell=False)
 
-        # unzip game (xxxx).zip from unzip line in game/install.bat
-        # following options should be set in dosbox.conf / actually do it later in converter
-        # fullscreen = true, output=overlay, aspect=true
+        # Resolve game payload the same way eXo does:
+        #   1) eXo/eXoDOS/<Title>.zip  (primary install zip)
+        #   2) Content/GameData/eXoDOS/<Title>.zip  (full media package)
+        #   3) already-unpacked tree under eXo/eXoDOS/ (post-install state)
+        #   4) optional downloadOnDemand when zip is still missing
+        confDir = os.path.join(self.collectionGamesConfDir, gGator.game)
         bats = [os.path.splitext(filename)[0] for filename in
-                os.listdir(os.path.join(self.collectionGamesConfDir, gGator.game)) if
-                os.path.splitext(filename)[-1].lower() == '.bat' and not os.path.splitext(filename)[0].lower() == 'install'
+                os.listdir(confDir) if
+                os.path.splitext(filename)[-1].lower() == '.bat'
+                and not os.path.splitext(filename)[0].lower() == 'install'
                 and not os.path.splitext(filename)[0].lower() == 'exception']
+        if not bats:
+            self.logger.log(
+                "  ERROR while trying to find zip file for " + confDir,
+                self.logger.ERROR)
+            return
         gameZip = bats[0] + '.zip'
-        # Unzip game
-        if gameZip is not None:
-            gameZipPath = os.path.join(
-                os.path.join(util.getCollectionGamesDir(self.exoCollectionDir, self.collectionVersion)), gameZip)
+        gameZipPath = self.__resolveGameZipPath__(gameZip)
 
+        if gameZipPath is not None:
             # ensure gameZip not 0 bytes, this will trigger a download if it is.
-            try:    
+            try:
                 if not os.path.getsize(gameZipPath):
-                    self.logger.log("  <WARNING>" + gameZipPath + " is 0 bytes. Removing.",self.logger.WARNING)
+                    self.logger.log("  <WARNING>" + gameZipPath + " is 0 bytes. Removing.", self.logger.WARNING)
                     os.remove(gameZipPath)
-            except OSError as error: 
+                    gameZipPath = None
+            except OSError:
                 pass
 
-            # If zip of the game is not found, try to download it
-            if not os.path.exists(gameZipPath):
-                self.logger.log('  <WARNING> %s not found' % gameZipPath, self.logger.WARNING)
-                if self.conversionConf['downloadOnDemand']:
-                    # try zip then try torrent
-                    downloadZipSuccess = util.downloadZip(gameZip, gameZipPath, self.logger)
+        if gameZipPath is None:
+            # Zip still missing — try already-unpacked eXo install tree.
+            extracted = self.__resolveUnpackedGameSource__(gGator, bats[0])
+            if extracted is not None:
+                self.logger.log(
+                    "  using already-unpacked game data at %s (no zip needed)" % extracted
+                )
+                self.__copyUnpackedGame__(extracted, gGator)
+            else:
+                primary = os.path.join(
+                    util.getCollectionGamesDir(self.exoCollectionDir, self.collectionVersion),
+                    gameZip,
+                )
+                self.logger.log('  <WARNING> %s not found' % primary, self.logger.WARNING)
+                if self.conversionConf.get('downloadOnDemand'):
+                    downloadZipSuccess = util.downloadZip(gameZip, primary, self.logger)
                     if not downloadZipSuccess:
-                        self.logger.log("  <WARNING> Web download Failed, trying Torrent",self.logger.WARNING)
-                        util.downloadTorrent(gameZip, gameZipPath, self.exoCollectionDir, self.logger)
+                        self.logger.log("  <WARNING> Web download Failed, trying Torrent", self.logger.WARNING)
+                        util.downloadTorrent(gameZip, primary, self.exoCollectionDir, self.logger)
+                    if os.path.isfile(primary) and os.path.getsize(primary) > 0:
+                        self.__unzipGame__(primary, gGator)
+                    else:
+                        self.logger.log(
+                            "  <ERROR> Could not obtain game data for %s" % gGator.game,
+                            self.logger.ERROR,
+                        )
+                        return
                 else:
-                    self.logger.log('  <WARNING> Activate Download on demand if you want to download missing games',
-                                    self.logger.WARNING)
-            self.__unzipGame__(gameZipPath, gGator)
+                    self.logger.log(
+                        '  <ERROR> Game zip missing and no unpacked tree found for %s. '
+                        'Point collectionDir at a complete eXoDOS install, or enable downloadOnDemand.'
+                        % gGator.game,
+                        self.logger.ERROR,
+                    )
+                    return
         else:
-            self.logger.log(
-                "  ERROR while trying to find zip file for " + os.path.join(self.collectionGamesConfDir, gGator.game),
-                self.logger.ERROR)
+            self.__unzipGame__(gameZipPath, gGator)
         self.logger.log("  unzipped")
 
         # Handle game update if it exists
@@ -179,6 +207,94 @@ class ExoConverter:
         if os.path.exists(updateZipPath):
             self.logger.log("  found an update for the game")
             self.__unzipGame__(updateZipPath, gGator)
+
+    def __resolveGameZipPath__(self, gameZip):
+        """Locate the install zip using eXoDOS's known locations."""
+        gamesDir = util.getCollectionGamesDir(self.exoCollectionDir, self.collectionVersion)
+        candidates = [
+            os.path.join(gamesDir, gameZip),
+            # Full media package (eXo torrent GameData path)
+            os.path.join(self.exoCollectionDir, 'Content', 'GameData', 'eXoDOS', gameZip),
+            os.path.join(self.exoCollectionDir, 'Content', 'GameData', 'eXoDOS', gameZip.replace(' - ', '_ ')),
+        ]
+        for path in candidates:
+            if os.path.isfile(path) and os.path.getsize(path) > 0:
+                if path != candidates[0]:
+                    self.logger.log("  found game zip at alternate path: %s" % path)
+                return path
+        return None
+
+    def __resolveUnpackedGameSource__(self, gGator, gameTitleStem):
+        """Find game files already extracted by eXo (install unzipped into eXoDOS/).
+
+        eXo runs: unzip "eXoDOS\\<Title>.zip" -d .\\eXoDOS\\
+        which leaves a folder under eXo/eXoDOS/ with the game binaries.
+        """
+        gamesDir = util.getCollectionGamesDir(self.exoCollectionDir, self.collectionVersion)
+        confDir = os.path.join(self.collectionGamesConfDir, gGator.game)
+        candidates = [
+            os.path.join(gamesDir, gGator.game),
+            os.path.join(gamesDir, gameTitleStem),
+            # Title without trailing " (YYYY)" — eXo IndexName style
+            os.path.join(gamesDir, gameTitleStem[:-7]) if len(gameTitleStem) > 7 else None,
+            confDir if self.__looksLikeUnpackedGame__(confDir) else None,
+        ]
+        for path in candidates:
+            if path and self.__looksLikeUnpackedGame__(path):
+                return path
+        return None
+
+    @staticmethod
+    def __looksLikeUnpackedGame__(path):
+        """True when path holds real game binaries, not just !dos install scaffolding."""
+        if not path or not os.path.isdir(path):
+            return False
+        skip_names = {
+            'install.bat', 'install.bsh', 'install.command',
+            'dosbox.conf', 'dosbox_linux.conf', 'extras',
+        }
+        skip_ext = {'.bat', '.bsh', '.command', '.conf', '.txt', '.md'}
+        game_ext = {'.exe', '.com', '.dat', '.ovl', '.dll', '.bin', '.img', '.iso', '.cue'}
+        try:
+            entries = os.listdir(path)
+        except OSError:
+            return False
+        for name in entries:
+            lower = name.lower()
+            if lower in skip_names:
+                continue
+            full = os.path.join(path, name)
+            if os.path.isdir(full):
+                # Nested game dir with binaries counts
+                if ExoConverter.__looksLikeUnpackedGame__(full):
+                    return True
+                continue
+            ext = os.path.splitext(lower)[1]
+            if ext in game_ext:
+                return True
+            if ext not in skip_ext and os.path.getsize(full) > 8192:
+                return True
+        return False
+
+    def __copyUnpackedGame__(self, sourceDir, gGator):
+        """Copy an already-unpacked eXo game tree into the converter output."""
+        destRoot = gGator.getLocalGameOutputDir()
+        os.makedirs(destRoot, exist_ok=True)
+        destGame = os.path.join(destRoot, gGator.game)
+        if os.path.abspath(sourceDir) == os.path.abspath(
+            os.path.join(self.collectionGamesConfDir, gGator.game)
+        ):
+            # Source is the !dos conf dir itself (rare fully-inlined layout).
+            # Copy everything into destGame.
+            if os.path.exists(destGame):
+                shutil.rmtree(destGame)
+            shutil.copytree(sourceDir, destGame)
+        else:
+            # Source is eXo/eXoDOS/<folder> produced by unzip -d eXoDOS
+            if os.path.exists(destGame):
+                shutil.rmtree(destGame)
+            shutil.copytree(sourceDir, destGame)
+        self.logger.log("  copied unpacked game -> %s" % destGame)
 
         # For win3x games, all files / dir / etc in game.pc/game should be moved to game.pc/ and sub game.pc/game deleted
         # do not use getLocalGameDataOutputDir as game data are in subdir at that point
