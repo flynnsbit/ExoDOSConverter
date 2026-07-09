@@ -283,7 +283,7 @@ def render_readme_ans(
 ) -> tuple[bytes, list[str]]:
     """Render README.ANS bytes and a list of warning strings.
 
-    Returns ``(cp437_bytes_with_crlf, warnings)``.
+    Returns ``(cp437_bytes_with_lf_only, warnings)``.
     """
     warnings: list[str] = []
     genres = genres or []
