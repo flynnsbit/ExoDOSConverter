@@ -180,7 +180,16 @@ def handlesFileType(line, pathPos, gGator):
             return misterCommand
         elif params[-1].rstrip('\n\r ') == 'floppy':
             localPath = locateMountedFiles(path, gGator)
-            return convertFloppy(localPath, gGator, params[1])
+            misterCommand = convertFloppy(localPath, gGator, params[1])
+            # Multi-disk floppy imgmount: move sibling images too (e.g. CKeen6
+            # ALIENS_D1/D2/D3). Only the first image gets the imgset line.
+            if len(params) > 5 and params[3] != '-t':
+                i = 3
+                while i < (len(params) - 2):
+                    sibling = locateMountedFiles(params[i].replace('"', ''), gGator)
+                    convertFloppy(sibling, gGator, params[1], emit_command=False)
+                    i = i + 1
+            return misterCommand
         else:  # Treat default version as cd
             localPath = locateMountedFiles(path, gGator)
             if params[1].rstrip('\n\r ') == 'c':
@@ -197,28 +206,55 @@ def locateMountedFiles(path, gGator):
     if platform.system() == 'Windows':
         path = path.replace('/', '\\')
 
-    localPath = util.localOSPath(os.path.join(gGator.getLocalGameOutputDir(), path))
-    if not os.path.exists(localPath):
-        localPath = util.localOSPath(os.path.join(gGator.getLocalGameDataOutputDir(), path))
-    if not os.path.exists(localPath):
-        localPath = util.localOSPath(os.path.join(gGator.outputDir, path))
-    # Last resort: source bats inside run.bat (handleRunBat) are NOT run through
-    # the conf converter's imgmount-path rewrite, so they still carry the raw
-    # eXoDOS layout prefix ".\eXoDOS\<dosname>\..." (e.g. v6 comconra). The
-    # extractor flattens the leading "eXoDOS\<dosname>\" away, so the file really
-    # lives directly under the game output dir. Strip that prefix and retry.
-    if not os.path.exists(localPath):
-        strippedPath = __stripExoLayoutPrefix__(path)
-        if strippedPath is not None:
-            candidate = util.localOSPath(os.path.join(gGator.getLocalGameOutputDir(), strippedPath))
+    # Normalise leading .\ / ./ so joins don't lose the game root.
+    clean = path.replace('/', os.sep).replace('\\', os.sep)
+    while clean.startswith('.' + os.sep):
+        clean = clean[2:]
+    if clean.startswith(os.sep):
+        clean = clean.lstrip(os.sep)
+
+    candidates = [
+        util.localOSPath(os.path.join(gGator.getLocalGameOutputDir(), clean)),
+        util.localOSPath(os.path.join(gGator.getLocalGameDataOutputDir(), clean)),
+        util.localOSPath(os.path.join(gGator.outputDir, clean)),
+        # Conf rewrite often drops the dosname folder (.\eXoDOS\CKeen6\floppy\X
+        # → .\floppy\X). Game data lives under <title>/<dosname>/floppy/X.
+        util.localOSPath(os.path.join(gGator.getLocalGameOutputDir(), gGator.game, clean)),
+        util.localOSPath(os.path.join(gGator.getLocalGameDataOutputDir(), gGator.game, clean)),
+    ]
+    for candidate in candidates:
+        if os.path.exists(candidate):
+            return candidate
+
+    # Source bats may still carry ".\eXoDOS\<dosname>\..." — strip and retry.
+    strippedPath = __stripExoLayoutPrefix__(path)
+    if strippedPath is not None:
+        for root in (
+            gGator.getLocalGameOutputDir(),
+            gGator.getLocalGameDataOutputDir(),
+        ):
+            candidate = util.localOSPath(os.path.join(root, strippedPath))
             if os.path.exists(candidate):
-                localPath = candidate
-    # TODO Same as the first two ifs but without genre ? used ?
-    # if not os.path.exists(localPath):
-    #     localPath = util.localOutputPath(os.path.join(gGator.outputDir, gGator.game + '.pc', path))
-    # if not os.path.exists(localPath):
-    #     localPath = util.localOutputPath(os.path.join(gGator.outputDir, gGator.game + '.pc', gGator.game, path))
-    return localPath
+                return candidate
+            # Also try without the dosname segment (already under game output).
+            parts = [p for p in strippedPath.replace('/', os.sep).split(os.sep) if p]
+            if len(parts) >= 2 and parts[0].lower() == str(gGator.game).lower():
+                candidate = util.localOSPath(os.path.join(root, *parts[1:]))
+                if os.path.exists(candidate):
+                    return candidate
+
+    # Basename walk under the game folder (last resort for rewritten paths).
+    base = ntpath.basename(path)
+    if base:
+        for root in (gGator.getLocalGameOutputDir(), gGator.getLocalGameDataOutputDir()):
+            if not os.path.isdir(root):
+                continue
+            for dirpath, _dirs, files in os.walk(root):
+                if base in files:
+                    return os.path.join(dirpath, base)
+
+    # Return the primary candidate even if missing so callers can log it.
+    return candidates[0]
 
 
 # Strips a leading "[.\]eXoDOS\<dosname>\" segment from an eXoDOS source path so
@@ -296,7 +332,7 @@ def convertCD(localPath, gGator, letter='d'):
 
 
 # Convert floppy file
-def convertFloppy(localPath, gGator, letter):
+def convertFloppy(localPath, gGator, letter, emit_command=True):
     # Move bootable file
     # TODO see if we can do makedirs below instead
     if not os.path.exists(os.path.join(gGator.outputDir, 'floppy')):
@@ -308,9 +344,25 @@ def convertFloppy(localPath, gGator, letter):
         gameFloppyDir = os.path.join(gGator.outputDir, 'floppy', gGator.game)
         if not os.path.exists(gameFloppyDir):
             os.mkdir(gameFloppyDir)
-        gGator.logger.log("      move %s to %s folder" % (ntpath.basename(localPath), 'floppy'))
-        shutil.move(localPath, gameFloppyDir)
-        # Modify and return command line
+        dest = os.path.join(gameFloppyDir, ntpath.basename(localPath))
+        if not os.path.exists(localPath):
+            # Soft-fail like convertCD: do not abort the whole game when a
+            # rewritten imgmount path cannot be resolved (e.g. multi-disk
+            # floppies after confconverter drops the dosname folder).
+            gGator.logger.log(
+                '      <WARNING> floppy source not found for "%s" (%s); '
+                'emitting imgset without moving the image'
+                % (gGator.game, localPath),
+                gGator.logger.WARNING,
+            )
+        elif os.path.abspath(localPath) != os.path.abspath(dest):
+            gGator.logger.log("      move %s to %s folder" % (ntpath.basename(localPath), 'floppy'))
+            if os.path.exists(dest):
+                os.remove(dest)
+            shutil.move(localPath, gameFloppyDir)
+        # Modify and return command line (optional for multi-disk siblings)
+        if not emit_command:
+            return ''
         return 'imgset fdd0 "/floppy/' + gGator.game + '/' + ntpath.basename(localPath) + '"\n'
 
 
