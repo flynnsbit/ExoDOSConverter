@@ -34,6 +34,7 @@ import subprocess
 import tempfile
 
 import ao486vhd
+import mymenupacker
 import util
 
 
@@ -149,9 +150,19 @@ class DosforgeVhdBuilder:
 
                 # Stage GAMES + MYMENU + support zips + AUTORUN_EDC.BAT
                 self._helper.__buildStagingTree__(stagingRoot, gameFolders, mode)
+                # Top300-style C:\DRIVERS (+ QEMM/DOS supplements) for CONFIG/AUTOEXEC.
+                includeQemm = str(
+                    self.conversionConf.get('misterIncludeQemm', 'true') or 'true'
+                ).strip().lower() not in ('0', 'false', 'no', 'off')
+                mymenupacker.extractBootC(
+                    stagingRoot,
+                    self.scriptDir,
+                    self.logger,
+                    includeQemm=includeQemm,
+                )
                 # Drop anything that would overwrite dosforge OS bootstrap.
                 self._stripProtectedRootSystemFiles(stagingRoot)
-                # 8.3-safe AUTOEXEC + CONFIG.SYS (see MiSTer C:\ prompt bug).
+                # Top300 multi-config CONFIG.SYS + AUTOEXEC ending in MyMenu (C: only).
                 self._writeRootBootFiles(stagingRoot, mode)
 
                 stagedBytes, requiredFree = self._helper.__calculateRequiredFreeBytes__(
@@ -253,25 +264,46 @@ class DosforgeVhdBuilder:
                 )
 
     def _writeRootBootFiles(self, stagingRoot, mode):
-        """Write 8.3-safe AUTOEXEC.BAT (+ CONFIG.SYS) for MiSTer boot.
+        """Write Top300-style CONFIG.SYS + AUTOEXEC.BAT for MiSTer boot.
+
+        Prefer templates from ``data/mister/boot-c.zip`` (Top300 ``_C`` adapted
+        for single-VHD C: layout with MyMenu at the end). Fall back to a
+        minimal MyMenu-only AUTOEXEC if the archive is missing.
 
         Critical: never CALL a long-named bat (e.g. AUTORUN_EDC.BAT) before
         DOSLFN is loaded — MS-DOS 6.22 without LFN will not find it and will
         drop straight to ``C:\\>``.
         """
+        configBytes = mymenupacker.bootCTemplateBytes(self.scriptDir, 'CONFIG.SYS')
+        autoexecBytes = mymenupacker.bootCTemplateBytes(self.scriptDir, 'AUTOEXEC.BAT')
+
+        if configBytes and autoexecBytes:
+            self.logger.log('  Installing Top300-style CONFIG.SYS + AUTOEXEC.BAT (C: only, MyMenu end)')
+            with open(os.path.join(stagingRoot, 'CONFIG.SYS'), 'wb') as fh:
+                fh.write(configBytes)
+            with open(os.path.join(stagingRoot, 'AUTOEXEC.BAT'), 'wb') as fh:
+                fh.write(autoexecBytes)
+            # Ensure DOS supplements from boot-c sit under DOS\ for DEVICE= lines.
+            # dosforge install merges payload; these fill gaps (HIMEM etc.).
+            dosSrc = os.path.join(stagingRoot, 'DOS')
+            if os.path.isdir(dosSrc):
+                self.logger.log('  DOS supplements staged for HIMEM/EMM386/SETVER/ASSIGN')
+            return
+
+        self.logger.log(
+            '  <WARNING> boot-c templates missing; writing minimal MyMenu AUTOEXEC',
+            self.logger.WARNING,
+        )
         autoexec = [
             '@ECHO OFF',
             'PROMPT $P$G',
-            # Avoid %PATH% expansion quirks on a virgin DOS environment.
-            'PATH C:\\;C:\\DOS;C:\\FDOS;C:\\FDOS\\BIN;C:\\UTILS;C:\\MYMENU;C:\\MYMENU\\UTILS',
-            # Prefer RUNMENU.BAT (8.3). Fall back to inlined MyMenu launch.
+            'PATH C:\\;C:\\DOS;C:\\FDOS;C:\\FDOS\\BIN;C:\\DRIVERS;C:\\UTILS;C:\\MYMENU;C:\\MYMENU\\UTILS',
             'IF EXIST C:\\RUNMENU.BAT CALL C:\\RUNMENU.BAT',
             'IF EXIST C:\\MYMENU\\UTILS\\DOSLFN.COM C:\\MYMENU\\UTILS\\DOSLFN.COM',
             'IF EXIST C:\\MYMENU\\MENU.BAT CALL C:\\MYMENU\\MENU.BAT',
             'IF EXIST C:\\MYMENU\\MYMENU.EXE C:\\MYMENU\\MYMENU.EXE C:\\GAMES',
         ]
         if mode == 'multi':
-            # If MyMenu/RUNMENU returns, re-enter instead of a bare prompt.
             autoexec.extend([
                 ':REMENU',
                 'IF EXIST C:\\RUNMENU.BAT CALL C:\\RUNMENU.BAT',
@@ -281,12 +313,6 @@ class DosforgeVhdBuilder:
         self._helper.__writeDosTextFile__(
             os.path.join(stagingRoot, 'AUTOEXEC.BAT'), autoexec
         )
-
-        # Explicit permanent shell so COMMAND.COM always processes AUTOEXEC.
-        # Do NOT reference HIMEM.SYS here: dosforge's full profile does not
-        # currently stage HIMEM into C:\DOS (it lives as HIMEM.SY_ on the
-        # install media). A missing DEVICE= line aborts with "Press any key"
-        # on MiSTer and looks like a failed autostart.
         config_lines = [
             'FILES=40',
             'BUFFERS=30',

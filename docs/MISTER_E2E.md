@@ -3,10 +3,37 @@
 This is the shortest path from **game selection** to a **bootable pack** with:
 
 - MS-DOS on a fixed VHD (via `dosforge create`)
-- `AUTOEXEC.BAT` → `AUTORUN_EDC.BAT` → **MyMenu**
+- Top300-style `CONFIG.SYS` (HIRAM/EMM386/QEMM menu) + `AUTOEXEC.BAT` → drivers → **MyMenu**
+- `C:\DRIVERS` + DOS supplements from `data/mister/boot-c.zip` (hydrated with MyMenu)
 - `MYMENU.INI` → `DRV = GAMES;C:\GAMES\`
 - Per-game `autorun.bat` + `README.ANS` + `1_Start.bat`
 - External `cd/` / `floppy/` / `bootdisk/` next to the VHD (when present)
+
+## Boot-C payload (Top300 drivers)
+
+Every dosforge VHD stages **C:-only** boot files adapted from
+[Top300_updates `_C`](https://github.com/flynnsbit/Top300_updates/tree/main/_C):
+
+| Path | Role |
+|------|------|
+| `data/mister/boot-c.zip` | DRIVERS + QEMM + DOS supplements + CONFIG/AUTOEXEC templates |
+| `data/mister/distro.zip` | MyMenu frontend |
+
+Regenerate `boot-c.zip` from a BOOT-DOS98 VHD (same image as the classic Top300 boot disk):
+
+```bash
+python3 scripts/extract_boot_c_from_vhd.py \
+  --vhd "/path/to/IDE 0-0 BOOT-DOS98.vhd" \
+  --out data/mister/boot-c.zip
+```
+
+Known sources:
+
+- Local template: `vhdtemplate/IDE 0-0 BOOT-DOS98.vhd` (gitignored)
+- SMB: `smb://denpc/18tb/MiSTer Projects/top-300-final/IDE 0-0 BOOT-DOS98.vhd`
+
+AUTOEXEC ends with MyMenu (no secondary `E:` VHD). Optional conf:
+`misterIncludeQemm=false` skips the QEMM tree to shrink the pack.
 
 ## Prerequisites
 
@@ -18,6 +45,7 @@ This is the shortest path from **game selection** to a **bootable pack** with:
 4. An **eXoDOS v6** collection with at least one game **zip** under `eXo/eXoDOS/`
    (selection names come from the converter CSV / bat titles, e.g. `Tris (1997)`, not always the XML short title)
 5. Linux: non-interactive `sudo` for NBD (`sudo -n true` should work), **or** run after `sudo -v`
+6. `data/mister/boot-c.zip` present (see above)
 
 ## GUI / TUI
 
@@ -36,6 +64,7 @@ misterBootMode = msdos622
 misterDosInstallProfile = minimal
 misterGenerateReadmeAns = true
 misterDosforgeBootAssets = /path/to/dosassets/msdos622
+misterIncludeQemm = true
 ```
 
 `misterLauncher=none` restores “boot straight into the only game” for single-game packs.
@@ -57,9 +86,11 @@ Exit 0 means all layout checks passed (MyMenu, AUTOEXEC, GAMES, autorun, README.
 
 | Path | Role |
 |------|------|
-| `C:\AUTOEXEC.BAT` | 8.3-only paths; calls `RUNMENU.BAT` / MyMenu |
+| `C:\CONFIG.SYS` | Top300 multi-config menu (default HIRAM) |
+| `C:\AUTOEXEC.BAT` | Drivers from `C:\DRIVERS`; MyMenu loop at end |
+| `C:\DRIVERS\` | Mouse, CD, SBCTL, HIRAM, etc. |
+| `C:\DOS\HIMEM.SYS` | Staged supplement (required by CONFIG) |
 | `C:\RUNMENU.BAT` | Loads `DOSLFN.COM`, runs `MYMENU\MENU.BAT` (loop) |
-| `C:\CONFIG.SYS` | `SHELL=COMMAND.COM /P` (+ HIMEM when full profile) |
 | `C:\MYMENU\` | MyMenu binaries + `MYMENU.INI` |
 | `C:\GAMES\<Title>\` | Game files, `autorun.bat`, `1_Start.bat`, `README.ANS` |
 | `C:\COMMAND.COM` | Non-zero (~54 KB for MS-DOS 6.22) |
