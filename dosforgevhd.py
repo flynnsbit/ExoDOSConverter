@@ -44,6 +44,21 @@ _DOS_SYSTEM_ESTIMATE_BYTES = 32 * 1024 * 1024
 # Minimum VHD size dosforge will accept for a useful disk.
 _MIN_VHD_BYTES = 64 * 1024 * 1024
 
+# Support zips / game trees must never clobber dosforge-installed system
+# files. A 0-byte COMMAND.COM from "(Manually Added Games).zip" was observed
+# wiping the real COMMAND.COM after custom-payload copy.
+_PROTECTED_ROOT_SYSTEM_FILES = frozenset({
+    "COMMAND.COM",
+    "IO.SYS",
+    "MSDOS.SYS",
+    "IBMBIO.COM",
+    "IBMDOS.COM",
+    "KERNEL.SYS",
+    "CONFIG.SYS",
+    "FDCONFIG.SYS",
+    "AUTOEXEC.BAT",  # we write our own after this cleanup
+})
+
 
 class DosforgeVhdBuilder:
     """Build a single bootable VHD via the dosforge CLI."""
@@ -111,10 +126,20 @@ class DosforgeVhdBuilder:
             )
             return False
 
-        mode = 'single' if len(gameFolders) == 1 else 'multi'
+        # MyMenu is the shipping default: even a single selected game boots
+        # into MyMenu so README.ANS previews and autorun.bat work as on multi
+        # packs. Set misterLauncher=none for the old "boot straight into game"
+        # single-game shortcut.
+        launcher = str(
+            self.conversionConf.get('misterLauncher', 'mymenu') or 'mymenu'
+        ).strip().lower()
+        if launcher in ('none', 'single') and len(gameFolders) == 1:
+            mode = 'single'
+        else:
+            mode = 'multi'
         self.logger.log(
-            '  Preparing ao486 VHD via dosforge in %s mode (%i game(s))'
-            % (mode, len(gameFolders))
+            '  Preparing ao486 VHD via dosforge in %s mode (%i game(s), launcher=%s)'
+            % (mode, len(gameFolders), launcher)
         )
 
         try:
@@ -124,6 +149,8 @@ class DosforgeVhdBuilder:
 
                 # Stage GAMES + MYMENU + support zips + AUTORUN_EDC.BAT
                 self._helper.__buildStagingTree__(stagingRoot, gameFolders, mode)
+                # Drop anything that would overwrite dosforge OS bootstrap.
+                self._stripProtectedRootSystemFiles(stagingRoot)
                 # Root AUTOEXEC that survives dosforge create payload copy.
                 self._writeRootAutoexec(stagingRoot)
 
@@ -196,6 +223,34 @@ class DosforgeVhdBuilder:
             if os.path.isfile(guess):
                 return guess
         return None
+
+    def _stripProtectedRootSystemFiles(self, stagingRoot):
+        """Remove root files that must come from dosforge, not support zips."""
+        try:
+            names = os.listdir(stagingRoot)
+        except OSError:
+            return
+        for name in names:
+            if name.upper() not in _PROTECTED_ROOT_SYSTEM_FILES:
+                continue
+            path = os.path.join(stagingRoot, name)
+            if not os.path.isfile(path):
+                continue
+            try:
+                size = os.path.getsize(path)
+            except OSError:
+                size = -1
+            self.logger.log(
+                '  stripping payload root system file %s (%s bytes) so dosforge OS install wins'
+                % (name, size)
+            )
+            try:
+                os.remove(path)
+            except OSError as exc:
+                self.logger.log(
+                    '  <WARNING> could not remove %s: %s' % (path, exc),
+                    self.logger.WARNING,
+                )
 
     def _writeRootAutoexec(self, stagingRoot):
         """Write C:\\AUTOEXEC.BAT so payload copy replaces dosforge defaults.

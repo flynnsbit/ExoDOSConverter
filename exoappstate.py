@@ -279,6 +279,8 @@ class ExoAppState:
             conversionConf['misterDosforgeBootAssets'] = self.getValue('misterDosforgeBootAssets') or ''
             conversionConf['misterSaveBufferMiB'] = self.getValue('misterSaveBufferMiB') or '64'
             conversionConf['misterGenerateReadmeAns'] = self.getValue('misterGenerateReadmeAns') or 'true'
+            # mymenu (default): always boot MyMenu. none: single-game direct launch.
+            conversionConf['misterLauncher'] = self.getValue('misterLauncher') or 'mymenu'
 
         if conversionType in [util.retrobat, util.batocera, util.recalbox]:
             useLongFolderNames = self.getBool('longGameFolder')

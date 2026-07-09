@@ -49,9 +49,20 @@ class Ao486VhdBuilder:
             self.logger.log('  <ERROR> No converted game folders were found in games/, cannot build ao486 VHD', self.logger.ERROR)
             return False
 
-        mode = 'single' if len(gameFolders) == 1 else 'multi'
+        # Default to MyMenu multi-mode even for one game (README.ANS + menu).
+        # misterLauncher=none keeps the single-game direct-boot shortcut.
+        launcher = str(
+            self.conversionConf.get('misterLauncher', 'mymenu') or 'mymenu'
+        ).strip().lower()
+        if launcher in ('none', 'single') and len(gameFolders) == 1:
+            mode = 'single'
+        else:
+            mode = 'multi'
         templateFamily = 'win3' if util.isWin3x(self.collectionVersion) else 'dos'
-        self.logger.log('  Preparing ao486 VHD in %s mode (%i game(s))' % (mode, len(gameFolders)))
+        self.logger.log(
+            '  Preparing ao486 VHD in %s mode (%i game(s), launcher=%s)'
+            % (mode, len(gameFolders), launcher)
+        )
 
         try:
             templates = self.__catalogTemplates__(templateFamily)

@@ -274,7 +274,12 @@ class GameGenerator:
         shutil.move(os.path.join(self.getLocalGameOutputDir(), util.getCleanGameID(self.metadata, '.txt')),
                     os.path.join(self.getLocalGameOutputDir(), '2_About.txt'))
         # Remove unused CDs
-        mister.removeUnusedCds(self.game, self.getLocalGameDataOutputDir(), self.logger)
+        mister.removeUnusedCds(
+            self.game,
+            self.getLocalGameDataOutputDir(),
+            self.logger,
+            scriptDir=self.scriptDir,
+        )
         # Remove any COMMAND.COM and CHOICE.EXE files, as they are not compatible with MiSTeR
         if self.isWin3x():
             tobeRemoved = [file for file in os.listdir(self.getLocalGameOutputDir()) if
