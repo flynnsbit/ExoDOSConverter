@@ -11,7 +11,10 @@ Layout matches the frozen samples in
 * Info block: Year/Source/Players/Mode, Genre, Developer, Publisher
 * Notes body (wrap 76, max 18 lines; truncate with marker)
 * Series footer (optional)
-* LF-only newlines (not CRLF — MyMenu double-spaces CRLF), CP437, trailing reset; no BOM
+* MS-DOS ANSI graphics line discipline (see ``_join_msdos_ansi_lines``):
+  80-column rows rely on DECAWM auto-wrap — no CR/LF after a full row —
+  so MyMenu does not paint a blank line between every row. Shorter rows
+  use CRLF. CP437, trailing reset; no BOM.
 
 Pure stdlib — no new packages.
 """
@@ -41,6 +44,9 @@ _TITLE = _ESC + "1;36;40m"    # bright cyan
 _LABEL = _ESC + "1;33;40m"    # bright yellow
 _VALUE = _ESC + "0;37;40m"    # white
 _BODY = _ESC + "0;37;40m"
+
+# CSI sequences that do not consume a text-mode cell (SGR, DEC private modes, etc.)
+_ANSI_CSI_RE = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 
 _COLS = 80
 _INNER = 78          # between the two vertical bars
@@ -130,6 +136,34 @@ def _centre(text: str, width: int) -> str:
     left = pad // 2
     right = pad - left
     return (" " * left) + text + (" " * right)
+
+
+def _visual_width(text: str) -> int:
+    """Count text-mode cells (CP437 glyphs), ignoring CSI / ESC sequences."""
+    return len(_ANSI_CSI_RE.sub("", text))
+
+
+def _join_msdos_ansi_lines(lines: list[str]) -> str:
+    """Join rows the way classic MS-DOS .ANS art expects.
+
+    On an 80-column DOS console (ANSI.SYS / MyMenu), writing the 80th glyph
+    auto-wraps the cursor to the next row (DECAWM). Emitting CR and/or LF
+    *after* a full-width row advances a second time, which paints a blank
+    line between every row — the double-spacing MyMenu showed for our
+    earlier LF-only and CRLF outputs.
+
+    Rules:
+    * visual width == 80 → no terminator (auto-wrap *is* the line advance)
+    * visual width < 80  → CRLF (DOS text standard)
+    * visual width > 80  → CRLF (should not happen for our layout; safe fallback)
+    """
+    parts: list[str] = []
+    for line in lines:
+        parts.append(line)
+        width = _visual_width(line)
+        if width != _COLS:
+            parts.append("\r\n")
+    return "".join(parts)
 
 
 def _field_row_simple(label: str, value: str) -> str:
@@ -283,7 +317,7 @@ def render_readme_ans(
 ) -> tuple[bytes, list[str]]:
     """Render README.ANS bytes and a list of warning strings.
 
-    Returns ``(cp437_bytes_with_lf_only, warnings)``.
+    Returns ``(cp437_msdos_ansi_bytes, warnings)``.
     """
     warnings: list[str] = []
     genres = genres or []
@@ -295,8 +329,10 @@ def render_readme_ans(
         genre_str = "(unclassified)"
 
     lines = []
-    # Prefixed clear + home so MyMenu fullscreen paint is clean
-    prefix = f"{_ESC}?7l{_ESC}40m{_ESC}2J{_ESC}H"
+    # Clear screen + home. Enable DECAWM (ESC[?7h) so the 80th column
+    # auto-wraps — required for full-width MS-DOS .ANS line discipline.
+    # MyMenu stock GAMEANSI files use ?7h the same way.
+    prefix = f"{_ESC}?7h{_ESC}40m{_ESC}2J{_ESC}H"
 
     lines.append(_top_border())
     lines.append(_title_row(title or "Unknown"))
@@ -341,13 +377,17 @@ def render_readme_ans(
         lines.append(_body_row(label + series_text))
     lines.append(_bottom_border())
 
-    # First line gets clear prefix glued to top border
+    # Sanity: every layout row should be exactly 80 cells (box edges).
+    for idx, row in enumerate(lines):
+        vw = _visual_width(row)
+        if vw != _COLS:
+            warnings.append("row %i visual width %i (expected %i)" % (idx, vw, _COLS))
+
+    # Clear/home prefix has zero visual width — glue onto first row so the
+    # 80-cell border still triggers a single auto-wrap, not wrap+newline.
     lines[0] = prefix + lines[0]
 
-    # Line endings: LF only (0x0A). Frozen A8 samples and MyMenu's ANSI
-    # viewer treat CRLF as *two* advances (CR + LF), which shows as a blank
-    # line after every row. DOS batch files still use CRLF elsewhere.
-    raw = "\n".join(lines) + "\n"
+    raw = _join_msdos_ansi_lines(lines)
     # Encode CP437 with replace; log replacements via warnings when non-encodable remain
     encoded = raw.encode("cp437", errors="replace")
     # Detect replacement chars that weren't intentional '?'
