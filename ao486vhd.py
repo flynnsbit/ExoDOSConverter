@@ -192,10 +192,22 @@ class Ao486VhdBuilder:
         gamesDestDir = os.path.join(stagingRoot, 'GAMES')
         os.makedirs(gamesDestDir, exist_ok=True)
 
+        # Map original LFN folder -> on-VHD folder name (may be shortened for
+        # single-game direct launch so RUNMENU can CD without quotes/parens).
+        stagedFolders = []
         for gameFolder in gameFolders:
             sourceFolder = os.path.join(gamesSourceDir, gameFolder)
-            destFolder = os.path.join(gamesDestDir, gameFolder)
+            destName = gameFolder
+            if mode == 'single' and len(gameFolders) == 1:
+                destName = self.__safeDosGameFolderName__(gameFolder)
+                if destName != gameFolder:
+                    self.logger.log(
+                        '  single-game folder on VHD: %s -> %s (8.3-safe CD path)'
+                        % (gameFolder, destName)
+                    )
+            destFolder = os.path.join(gamesDestDir, destName)
             shutil.copytree(sourceFolder, destFolder)
+            stagedFolders.append(destName)
 
         mymenuSourceDir = os.path.join(self.outputDir, 'mymenu')
         if not os.path.isdir(mymenuSourceDir):
@@ -207,7 +219,23 @@ class Ao486VhdBuilder:
 
         self.__extractSupportArchive__('(Utilities and System Files).zip', stagingRoot)
         self.__extractSupportArchive__('(Manually Added Games).zip', stagingRoot)
-        self.__writeAutorunScript__(stagingRoot, mode, gameFolders)
+        self.__writeAutorunScript__(stagingRoot, mode, stagedFolders)
+
+    @staticmethod
+    def __safeDosGameFolderName__(longName):
+        """Build an 8.3-safe directory name for single-game CD without quotes.
+
+        MS-DOS batch breaks on ``CD "C:\\GAMES\\DOOM (1993)"`` (parens/spaces).
+        Prefer first alphanumeric token, max 8 chars (e.g. DOOM).
+        """
+        import re
+        # Prefer leading title token before year/parens
+        token = re.split(r'[\s(\[]', longName.strip(), maxsplit=1)[0]
+        cleaned = re.sub(r'[^A-Za-z0-9]', '', token).upper()
+        if not cleaned:
+            cleaned = re.sub(r'[^A-Za-z0-9]', '', longName).upper()
+        cleaned = (cleaned or 'GAME')[:8]
+        return cleaned
 
     def __extractSupportArchive__(self, archiveName, stagingRoot):
         archivePath = os.path.join(self.scriptDir, 'data', 'mister', archiveName)
@@ -229,9 +257,12 @@ class Ao486VhdBuilder:
         lines.append('IF EXIST C:\\UTILS\\DOSLFN.COM C:\\UTILS\\DOSLFN.COM')
 
         if mode == 'single':
-            # Quoted path needs LFN for titles like "Tris (1997)".
+            # Unquoted 8.3-safe path only — quoted LFN with spaces/parens
+            # yields "Parameter format not correct" on MS-DOS 6.22.
+            folder = gameFolders[0]
             lines.extend([
-                'CD "C:\\GAMES\\%s"' % gameFolders[0],
+                'C:',
+                'CD \\GAMES\\%s' % folder,
                 'IF EXIST AUTORUN.BAT CALL AUTORUN.BAT',
                 'IF NOT EXIST AUTORUN.BAT IF EXIST 1_START.BAT CALL 1_START.BAT',
             ])
