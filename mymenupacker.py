@@ -108,6 +108,26 @@ def extractBootC(stagingRoot, scriptDir, logger, includeQemm=True):
         for p in missing:
             logger.log('  <WARNING> boot-c missing critical file: %s' % p, logger.WARNING)
 
+    # IMGTRY.BAT (MiSTer media helper) is used by 1_Start via CALL imgtry, but
+    # is not always present inside distro.zip. Drop a copy into DRIVERS (on PATH).
+    imgtrySrc = os.path.join(scriptDir, 'data', 'mister', 'distro', 'utils', 'IMGTRY.BAT')
+    if not os.path.isfile(imgtrySrc):
+        imgtrySrc = os.path.join(scriptDir, 'data', 'mister', 'IMGTRY.BAT')
+    if os.path.isfile(imgtrySrc):
+        for destDir in (
+            driversDir,
+            os.path.join(stagingRoot, 'MYMENU', 'UTILS'),
+            os.path.join(stagingRoot, 'UTILS'),
+        ):
+            if os.path.isdir(destDir) or destDir == driversDir:
+                os.makedirs(destDir, exist_ok=True)
+                shutil.copy2(imgtrySrc, os.path.join(destDir, 'IMGTRY.BAT'))
+    else:
+        logger.log(
+            '  <WARNING> IMGTRY.BAT not found under data/mister; CD imgset may fail',
+            logger.WARNING,
+        )
+
     logger.log(
         '  boot-c staged: DRIVERS%s + DOS supplements + TMP'
         % (' + QEMM' if includeQemm else '')

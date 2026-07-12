@@ -226,16 +226,20 @@ class Ao486VhdBuilder:
         """Build an 8.3-safe directory name for single-game CD without quotes.
 
         MS-DOS batch breaks on ``CD "C:\\GAMES\\DOOM (1993)"`` (parens/spaces).
-        Prefer first alphanumeric token, max 8 chars (e.g. DOOM).
+        Prefer a meaningful alphanumeric token (skip articles), max 8 chars.
         """
         import re
-        # Prefer leading title token before year/parens
-        token = re.split(r'[\s(\[]', longName.strip(), maxsplit=1)[0]
-        cleaned = re.sub(r'[^A-Za-z0-9]', '', token).upper()
-        if not cleaned:
-            cleaned = re.sub(r'[^A-Za-z0-9]', '', longName).upper()
-        cleaned = (cleaned or 'GAME')[:8]
-        return cleaned
+        # Drop leading articles so "The 7th Guest" -> 7THGUEST not THE
+        words = re.split(r'[\s(\[,\-_]+', longName.strip())
+        skip = {'THE', 'A', 'AN', 'OF', 'AND'}
+        tokens = []
+        for w in words:
+            cleaned = re.sub(r'[^A-Za-z0-9]', '', w).upper()
+            if not cleaned or cleaned in skip:
+                continue
+            tokens.append(cleaned)
+        joined = ''.join(tokens) if tokens else re.sub(r'[^A-Za-z0-9]', '', longName).upper()
+        return (joined or 'GAME')[:8]
 
     def __extractSupportArchive__(self, archiveName, stagingRoot):
         archivePath = os.path.join(self.scriptDir, 'data', 'mister', archiveName)
@@ -718,7 +722,11 @@ class Ao486VhdBuilder:
         return int(match.group(1))
 
     def __sanitizeFileName__(self, name):
-        sanitized = re.sub(r'[<>:"/\\|?*]', '_', name).strip().rstrip('.')
+        # Host path + QEMU -drive file=... cannot tolerate spaces/commas/parens
+        # (they split the QEMU argv). Keep a readable but shell-safe name.
+        sanitized = re.sub(r'[<>:"/\\|?*,()\']', '_', name)
+        sanitized = re.sub(r'\s+', '_', sanitized)
+        sanitized = re.sub(r'_+', '_', sanitized).strip('._')
         return sanitized if sanitized != '' else 'ao486'
 
     def __calculateRequiredFreeBytes__(self, stagingRoot):

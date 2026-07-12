@@ -376,7 +376,10 @@ def normalizeConfiguredPaths(configuration):
 
 
 def sanitizeBuildName(name):
-    sanitized = re.sub(r'[<>:"/\\|?*]', '_', str(name).strip()).rstrip('.')
+    # Spaces/commas/parens break QEMU -drive file= paths when building VHDs.
+    sanitized = re.sub(r'[<>:"/\\|?*,()\']', '_', str(name).strip())
+    sanitized = re.sub(r'\s+', '_', sanitized)
+    sanitized = re.sub(r'_+', '_', sanitized).strip('._')
     return sanitized
 
 

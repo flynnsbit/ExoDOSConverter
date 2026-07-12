@@ -290,7 +290,7 @@ class DosforgeVhdBuilder:
                 fh.write(autoexecBytes)
             dosSrc = os.path.join(stagingRoot, 'DOS')
             if os.path.isdir(dosSrc):
-                self.logger.log('  DOS supplements staged for HIMEM/EMM386/SETVER/ASSIGN')
+                self.logger.log('  DOS supplements staged for HIMEM/EMM386/SETVER')
             return
 
         if mode == 'single':
@@ -323,7 +323,7 @@ class DosforgeVhdBuilder:
                     'GOTO END',
                     '',
                     ':CLEAN',
-                    'IF EXIST C:\\DRIVERS\\SHSUCDX.COM C:\\DRIVERS\\SHSUCDX.COM /D:IDE-CD /L:F /V /C',
+                    'IF EXIST C:\\DRIVERS\\SHSUCDX.COM C:\\DRIVERS\\SHSUCDX.COM /D:IDE-CD /L:D /V /C',
                     'IF EXIST C:\\DRIVERS\\CUTEPACK\\CTMOUSE.EXE C:\\DRIVERS\\CUTEPACK\\CTMOUSE.EXE /O',
                     '@ECHO.',
                     '@ECHO CLEAN profile: game not auto-loaded.',
