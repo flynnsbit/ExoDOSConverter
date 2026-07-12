@@ -277,17 +277,74 @@ class DosforgeVhdBuilder:
         configBytes = mymenupacker.bootCTemplateBytes(self.scriptDir, 'CONFIG.SYS')
         autoexecBytes = mymenupacker.bootCTemplateBytes(self.scriptDir, 'AUTOEXEC.BAT')
 
-        if configBytes and autoexecBytes:
-            self.logger.log('  Installing Top300-style CONFIG.SYS + AUTOEXEC.BAT (C: only, MyMenu end)')
+        if configBytes:
+            self.logger.log('  Installing Top300-style CONFIG.SYS (C: only)')
             with open(os.path.join(stagingRoot, 'CONFIG.SYS'), 'wb') as fh:
                 fh.write(configBytes)
+
+        if autoexecBytes and mode != 'single':
+            self.logger.log(
+                '  Installing Top300-style AUTOEXEC.BAT (C: only, MyMenu end)'
+            )
             with open(os.path.join(stagingRoot, 'AUTOEXEC.BAT'), 'wb') as fh:
                 fh.write(autoexecBytes)
-            # Ensure DOS supplements from boot-c sit under DOS\ for DEVICE= lines.
-            # dosforge install merges payload; these fill gaps (HIMEM etc.).
             dosSrc = os.path.join(stagingRoot, 'DOS')
             if os.path.isdir(dosSrc):
                 self.logger.log('  DOS supplements staged for HIMEM/EMM386/SETVER/ASSIGN')
+            return
+
+        if mode == 'single':
+            # Direct-to-game: keep Top300 driver loaders, but end with RUNMENU
+            # (which CDs into the only game and calls autorun/1_Start) — never
+            # MyMenu. Prefer rewriting the boot-c AUTOEXEC body when present.
+            self.logger.log(
+                '  Installing AUTOEXEC.BAT for single-game direct launch (no MyMenu)'
+            )
+            if autoexecBytes:
+                text = autoexecBytes.decode('ascii', errors='replace')
+                # Cut off at the MyMenu frontend block; replace with RUNMENU only.
+                marker = 'REM --- MyMenu frontend'
+                if marker in text:
+                    text = text.split(marker)[0]
+                lines = [ln.rstrip('\r\n') for ln in text.replace('\r\n', '\n').split('\n')]
+                while lines and lines[-1].strip() in ('', ':END', 'GOTO END', ':CLEAN'):
+                    lines.pop()
+                # Drop any leftover :CLEAN section if split left mid-file junk
+                cleaned = []
+                for ln in lines:
+                    if ln.strip().upper() == ':CLEAN':
+                        break
+                    cleaned.append(ln)
+                lines = cleaned
+                lines.extend([
+                    '',
+                    'REM --- single game direct launch (misterLauncher=none) ---',
+                    'IF EXIST C:\\RUNMENU.BAT CALL C:\\RUNMENU.BAT',
+                    'GOTO END',
+                    '',
+                    ':CLEAN',
+                    'IF EXIST C:\\DRIVERS\\SHSUCDX.COM C:\\DRIVERS\\SHSUCDX.COM /D:IDE-CD /L:F /V /C',
+                    'IF EXIST C:\\DRIVERS\\CUTEPACK\\CTMOUSE.EXE C:\\DRIVERS\\CUTEPACK\\CTMOUSE.EXE /O',
+                    '@ECHO.',
+                    '@ECHO CLEAN profile: game not auto-loaded.',
+                    'GOTO END',
+                    '',
+                    ':END',
+                ])
+                self._helper.__writeDosTextFile__(
+                    os.path.join(stagingRoot, 'AUTOEXEC.BAT'), lines
+                )
+            else:
+                self._helper.__writeDosTextFile__(
+                    os.path.join(stagingRoot, 'AUTOEXEC.BAT'),
+                    [
+                        '@ECHO OFF',
+                        'PROMPT $P$G',
+                        'PATH C:\\;C:\\DOS;C:\\DRIVERS;C:\\UTILS;C:\\MYMENU;C:\\MYMENU\\UTILS',
+                        'IF EXIST C:\\MYMENU\\UTILS\\DOSLFN.COM C:\\MYMENU\\UTILS\\DOSLFN.COM',
+                        'IF EXIST C:\\RUNMENU.BAT CALL C:\\RUNMENU.BAT',
+                    ],
+                )
             return
 
         self.logger.log(
@@ -302,26 +359,24 @@ class DosforgeVhdBuilder:
             'IF EXIST C:\\MYMENU\\UTILS\\DOSLFN.COM C:\\MYMENU\\UTILS\\DOSLFN.COM',
             'IF EXIST C:\\MYMENU\\MENU.BAT CALL C:\\MYMENU\\MENU.BAT',
             'IF EXIST C:\\MYMENU\\MYMENU.EXE C:\\MYMENU\\MYMENU.EXE C:\\GAMES',
+            ':REMENU',
+            'IF EXIST C:\\RUNMENU.BAT CALL C:\\RUNMENU.BAT',
+            'IF EXIST C:\\MYMENU\\MENU.BAT CALL C:\\MYMENU\\MENU.BAT',
+            'GOTO REMENU',
         ]
-        if mode == 'multi':
-            autoexec.extend([
-                ':REMENU',
-                'IF EXIST C:\\RUNMENU.BAT CALL C:\\RUNMENU.BAT',
-                'IF EXIST C:\\MYMENU\\MENU.BAT CALL C:\\MYMENU\\MENU.BAT',
-                'GOTO REMENU',
-            ])
         self._helper.__writeDosTextFile__(
             os.path.join(stagingRoot, 'AUTOEXEC.BAT'), autoexec
         )
-        config_lines = [
-            'FILES=40',
-            'BUFFERS=30',
-            'STACKS=9,256',
-            'SHELL=C:\\COMMAND.COM C:\\ /E:1024 /P',
-        ]
-        self._helper.__writeDosTextFile__(
-            os.path.join(stagingRoot, 'CONFIG.SYS'), config_lines
-        )
+        if not configBytes:
+            config_lines = [
+                'FILES=40',
+                'BUFFERS=30',
+                'STACKS=9,256',
+                'SHELL=C:\\COMMAND.COM C:\\ /E:1024 /P',
+            ]
+            self._helper.__writeDosTextFile__(
+                os.path.join(stagingRoot, 'CONFIG.SYS'), config_lines
+            )
 
     def _pickSizeAndFormat(self, stagedBytes, requiredFree):
         """Return (size_bytes, fat_format, boot_mode)."""
