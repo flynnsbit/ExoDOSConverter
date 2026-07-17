@@ -319,8 +319,18 @@ def locateMountedFiles(path, gGator):
     # eXo conf typo / rename: e.g. Blood dosbox.conf says BLOOD121.CUE but the
     # zip ships BLOODCD1.cue/.img. If the path points under cd/, pick the only
     # (or best) disc image present so convertCD still moves external media.
+    # Note: cleaned paths look like "cd/BLOOD121.CUE" (no leading slash), so
+    # match "cd/" prefix / path segment, not only "/cd/".
     clean_l = clean.lower().replace('\\', '/')
-    if '/cd/' in clean_l or clean_l.endswith('/cd') or clean_l == 'cd':
+    path_parts = [p for p in clean_l.split('/') if p]
+    is_cd_path = (
+        clean_l == 'cd'
+        or clean_l.startswith('cd/')
+        or clean_l.endswith('/cd')
+        or '/cd/' in clean_l
+        or 'cd' in path_parts
+    )
+    if is_cd_path:
         for root in (gGator.getLocalGameOutputDir(), gGator.getLocalGameDataOutputDir()):
             cd_dir = os.path.join(root, 'cd')
             if not os.path.isdir(cd_dir):
