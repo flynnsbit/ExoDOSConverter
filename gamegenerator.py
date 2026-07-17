@@ -340,6 +340,22 @@ class GameGenerator:
                     self.logger.WARNING,
                 )
 
+        # Optional: force Gravis UltraSound as the pre-selected audio path.
+        preferGus = str(
+            self.conversionConf.get('misterPreferGus', 'false')
+        ).strip().lower()
+        if preferGus in ('1', 'true', 'yes', 'on'):
+            try:
+                import mistergus
+                mistergus.apply_gus_defaults(
+                    targetGameOutputDir, logger=self.logger
+                )
+            except Exception as exc:
+                self.logger.log(
+                    '    <WARNING> GUS default apply failed: %s' % exc,
+                    self.logger.WARNING,
+                )
+
     # Post-conversion for openDingux for a given game
     def __postConversionForOpenDingux__(self):
         self.logger.log("  opendingux post-conversion")

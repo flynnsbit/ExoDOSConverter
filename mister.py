@@ -310,6 +310,39 @@ def locateMountedFiles(path, gGator):
             for dirpath, _dirs, files in os.walk(root):
                 if base in files:
                     return os.path.join(dirpath, base)
+                # Case-insensitive basename match (eXo confs sometimes wrong case).
+                base_l = base.lower()
+                for f in files:
+                    if f.lower() == base_l:
+                        return os.path.join(dirpath, f)
+
+    # eXo conf typo / rename: e.g. Blood dosbox.conf says BLOOD121.CUE but the
+    # zip ships BLOODCD1.cue/.img. If the path points under cd/, pick the only
+    # (or best) disc image present so convertCD still moves external media.
+    clean_l = clean.lower().replace('\\', '/')
+    if '/cd/' in clean_l or clean_l.endswith('/cd') or clean_l == 'cd':
+        for root in (gGator.getLocalGameOutputDir(), gGator.getLocalGameDataOutputDir()):
+            cd_dir = os.path.join(root, 'cd')
+            if not os.path.isdir(cd_dir):
+                # Also try <dosname>/cd after incomplete flatten
+                cd_dir = os.path.join(root, str(gGator.game), 'cd')
+            if not os.path.isdir(cd_dir):
+                continue
+            disc_ext = {'.cue', '.iso', '.img', '.bin', '.ccd'}
+            discs = [
+                f for f in os.listdir(cd_dir)
+                if os.path.splitext(f)[1].lower() in disc_ext
+            ]
+            if not discs:
+                continue
+            # Prefer .cue when present (imgset/imgtry), else first disc image.
+            cues = [f for f in discs if f.lower().endswith('.cue')]
+            pick = sorted(cues)[0] if cues else sorted(discs)[0]
+            found = os.path.join(cd_dir, pick)
+            gGator.logger.log(
+                '      CD path %s missing; using on-disk %s' % (path, found)
+            )
+            return found
 
     # Return the primary candidate even if missing so callers can log it.
     return candidates[0]

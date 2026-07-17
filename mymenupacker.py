@@ -128,10 +128,50 @@ def extractBootC(stagingRoot, scriptDir, logger, includeQemm=True):
             logger.WARNING,
         )
 
+    # Gravis UltraSound tree (ULTRADIR=C:\ULTRASND) + PicoMEM drivers (C:\PICOMEM)
+    _stageNamedTree(
+        stagingRoot,
+        scriptDir,
+        logger,
+        dataRel=('data', 'mister', 'ultrasnd'),
+        destName='ULTRASND',
+    )
+    _stageNamedTree(
+        stagingRoot,
+        scriptDir,
+        logger,
+        dataRel=('data', 'mister', 'picomem'),
+        destName='PICOMEM',
+    )
+
     logger.log(
         '  boot-c staged: DRIVERS%s + DOS supplements + TMP'
         % (' + QEMM' if includeQemm else '')
     )
+    return True
+
+
+def _stageNamedTree(stagingRoot, scriptDir, logger, dataRel, destName):
+    """Copy data/mister/<name>/ into staging as C:\\<DESTNAME>\\."""
+    src = os.path.join(scriptDir, *dataRel)
+    if not os.path.isdir(src):
+        logger.log(
+            '  <WARNING> Missing %s payload at %s' % (destName, src),
+            logger.WARNING,
+        )
+        return False
+    dest = os.path.join(stagingRoot, destName)
+    if os.path.isdir(dest):
+        shutil.rmtree(dest)
+    shutil.copytree(src, dest)
+    # Drop non-DOS junk if present
+    for junk in ('.gitignore', 'README.md', '.git'):
+        p = os.path.join(dest, junk)
+        if os.path.isfile(p):
+            os.remove(p)
+        elif os.path.isdir(p):
+            shutil.rmtree(p)
+    logger.log('  staged C:\\%s from %s' % (destName, src))
     return True
 
 

@@ -255,10 +255,7 @@ class Ao486VhdBuilder:
         scriptPath = os.path.join(stagingRoot, 'RUNMENU.BAT')
         lines = ['@ECHO OFF']
 
-        # Payload ships DOSLFN.COM (not DOSLFNM.COM). Try both.
-        lines.append('IF EXIST C:\\MYMENU\\UTILS\\DOSLFN.COM C:\\MYMENU\\UTILS\\DOSLFN.COM')
-        lines.append('IF EXIST C:\\MYMENU\\UTILS\\DOSLFNM.COM C:\\MYMENU\\UTILS\\DOSLFNM.COM')
-        lines.append('IF EXIST C:\\UTILS\\DOSLFN.COM C:\\UTILS\\DOSLFN.COM')
+        # AUTOEXEC already loads DOSLFNM once; RUNMENU only launches the menu/game.
 
         if mode == 'single':
             # Unquoted 8.3-safe path only — quoted LFN with spaces/parens
@@ -284,10 +281,9 @@ class Ao486VhdBuilder:
     def __patchMyMenuPayload__(self, mymenuDir):
         menuBatPath = os.path.join(mymenuDir, 'MENU.BAT')
         if os.path.exists(menuBatPath):
+            # LFN is loaded once from AUTOEXEC (DOSLFNM only).
             self.__writeDosTextFile__(menuBatPath, [
                 '@echo off',
-                'if exist c:\\mymenu\\utils\\doslfn.com c:\\mymenu\\utils\\doslfn.com',
-                'if exist c:\\mymenu\\utils\\doslfnm.com c:\\mymenu\\utils\\doslfnm.com',
                 'c:',
                 'cd \\mymenu',
                 'mymenu.exe c:\\games',
@@ -304,8 +300,12 @@ class Ao486VhdBuilder:
         updatedLines = []
         foundLFN = False
         foundDriveList = False
+        foundGamesDrv = False
 
         for line in originalLines:
+            # Single-VHD packs: never leave secondary-disk E: paths.
+            line = re.sub(r'\bE:\\', r'C:\\', line, flags=re.IGNORECASE)
+            line = re.sub(r'\be:/', r'C:/', line, flags=re.IGNORECASE)
             if re.match(r'^\s*LFN\s*=', line, flags=re.IGNORECASE):
                 updatedLines.append('LFN=T')
                 foundLFN = True
@@ -313,6 +313,11 @@ class Ao486VhdBuilder:
                 updatedLines.append('DOLISTDRV=C')
                 foundDriveList = True
             elif re.match(r'^\s*DRV\s*=', line, flags=re.IGNORECASE):
+                # Keep only the GAMES drive on C:; drop dual-VHD E: drive entries.
+                if re.search(r'GAMES', line, flags=re.IGNORECASE):
+                    updatedLines.append('DRV = GAMES;C:\\GAMES\\')
+                    foundGamesDrv = True
+                # skip other DRV lines (APPS/MUSIC/etc. on secondary disks)
                 continue
             else:
                 updatedLines.append(line)
@@ -321,7 +326,8 @@ class Ao486VhdBuilder:
             updatedLines.append('LFN=T')
         if not foundDriveList:
             updatedLines.append('DOLISTDRV=C')
-        updatedLines.append('DRV = GAMES;C:\\GAMES\\')
+        if not foundGamesDrv:
+            updatedLines.append('DRV = GAMES;C:\\GAMES\\')
 
         self.__writeDosTextFile__(iniPath, updatedLines)
 

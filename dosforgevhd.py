@@ -57,7 +57,16 @@ _PROTECTED_ROOT_SYSTEM_FILES = frozenset({
     "KERNEL.SYS",
     "CONFIG.SYS",
     "FDCONFIG.SYS",
+    "FDAUTO.BAT",
     "AUTOEXEC.BAT",  # we write our own after this cleanup
+})
+
+# FreeDOS ships FDCONFIG.SYS + FDAUTO.BAT which take precedence over our
+# Top300 CONFIG.SYS + AUTOEXEC.BAT. After payload install we remove them
+# so the MiSTer menu boot path wins.
+_FREEDOS_BOOT_OVERRIDE_FILES = frozenset({
+    "FDCONFIG.SYS",
+    "FDAUTO.BAT",
 })
 
 
@@ -144,7 +153,17 @@ class DosforgeVhdBuilder:
         )
 
         try:
-            with tempfile.TemporaryDirectory(prefix='edc-dosforge-') as tempDir:
+            # Stage on the same large filesystem as the pack output — never on
+            # /tmp (often a small tmpfs). Large multi-game packs exceed /tmp.
+            stagingParent = str(
+                self.conversionConf.get('misterStagingDir', '') or ''
+            ).strip()
+            if not stagingParent:
+                stagingParent = os.path.join(self.outputDir, '.edc-staging')
+            os.makedirs(stagingParent, exist_ok=True)
+            with tempfile.TemporaryDirectory(
+                prefix='edc-dosforge-', dir=stagingParent
+            ) as tempDir:
                 stagingRoot = os.path.join(tempDir, 'vhd-root')
                 os.makedirs(stagingRoot, exist_ok=True)
 
@@ -199,6 +218,9 @@ class DosforgeVhdBuilder:
                     bootMode=bootMode,
                     payloadDir=stagingRoot,
                 )
+
+                if bootMode in ('freedos', 'msdos71', 'pcdos71'):
+                    self._stripFreedosBootOverrides(dosforgeBin, vhdPath)
 
                 self.logger.log('  ao486 VHD created: %s' % vhdPath)
                 self.logger.log('  ao486 pack directory: %s' % buildOutputDir)
@@ -341,7 +363,7 @@ class DosforgeVhdBuilder:
                         '@ECHO OFF',
                         'PROMPT $P$G',
                         'PATH C:\\;C:\\DOS;C:\\DRIVERS;C:\\UTILS;C:\\MYMENU;C:\\MYMENU\\UTILS',
-                        'IF EXIST C:\\MYMENU\\UTILS\\DOSLFN.COM C:\\MYMENU\\UTILS\\DOSLFN.COM',
+                        'IF EXIST C:\\MYMENU\\UTILS\\DOSLFNM.COM C:\\MYMENU\\UTILS\\DOSLFNM.COM',
                         'IF EXIST C:\\RUNMENU.BAT CALL C:\\RUNMENU.BAT',
                     ],
                 )
@@ -355,8 +377,8 @@ class DosforgeVhdBuilder:
             '@ECHO OFF',
             'PROMPT $P$G',
             'PATH C:\\;C:\\DOS;C:\\FDOS;C:\\FDOS\\BIN;C:\\DRIVERS;C:\\UTILS;C:\\MYMENU;C:\\MYMENU\\UTILS',
+            'IF EXIST C:\\MYMENU\\UTILS\\DOSLFNM.COM C:\\MYMENU\\UTILS\\DOSLFNM.COM',
             'IF EXIST C:\\RUNMENU.BAT CALL C:\\RUNMENU.BAT',
-            'IF EXIST C:\\MYMENU\\UTILS\\DOSLFN.COM C:\\MYMENU\\UTILS\\DOSLFN.COM',
             'IF EXIST C:\\MYMENU\\MENU.BAT CALL C:\\MYMENU\\MENU.BAT',
             'IF EXIST C:\\MYMENU\\MYMENU.EXE C:\\MYMENU\\MYMENU.EXE C:\\GAMES',
             ':REMENU',
@@ -513,3 +535,28 @@ class DosforgeVhdBuilder:
 
         if not os.path.isfile(vhdPath):
             raise RuntimeError('dosforge reported success but VHD is missing: %s' % vhdPath)
+
+    def _stripFreedosBootOverrides(self, dosforgeBin, vhdPath):
+        """Remove FreeDOS FDCONFIG/FDAUTO so Top300 CONFIG/AUTOEXEC control boot."""
+        for name in sorted(_FREEDOS_BOOT_OVERRIDE_FILES):
+            cmd = [dosforgeBin, 'rm', vhdPath, '::/%s' % name]
+            try:
+                result = subprocess.run(
+                    cmd, capture_output=True, text=True, timeout=60
+                )
+            except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+                self.logger.log(
+                    '  <WARNING> could not remove %s from VHD: %s' % (name, exc),
+                    self.logger.WARNING,
+                )
+                continue
+            if result.returncode == 0:
+                self.logger.log('  Removed FreeDOS override %s from VHD' % name)
+            else:
+                # Missing is fine (already gone / not FreeDOS profile).
+                msg = (result.stderr or result.stdout or '').strip()
+                if msg and 'not found' not in msg.lower() and 'No such' not in msg:
+                    self.logger.log(
+                        '  <WARNING> dosforge rm %s: %s' % (name, msg),
+                        self.logger.WARNING,
+                    )
