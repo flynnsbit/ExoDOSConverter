@@ -16,7 +16,9 @@ Production path: **recipe → convert → dosforge VHD**. Stay in Grok CLI. Do *
 
 **CLI:** `python3 -m packcli …` or `python3 scripts/mister-pack …`  
 **Slash:** `/mister-pack`  
-**Skill path:** `.grok/skills/mister-pack/SKILL.md` (synced docs: `docs/MISTER_PACK_SKILL.md`)
+**Skill path:** `.grok/skills/mister-pack/SKILL.md` (synced docs: `docs/MISTER_PACK_SKILL.md`)  
+**Fresh install (shell):** `docs/install_fresh.md`  
+**Fresh install (Grok CLI, minimal):** `docs/install_fresh_grok.md`
 
 ---
 

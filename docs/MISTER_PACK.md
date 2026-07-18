@@ -2,6 +2,11 @@
 
 **Full feature & usage guide (skill instructions):** [MISTER_PACK_SKILL.md](MISTER_PACK_SKILL.md) and `.grok/skills/mister-pack/SKILL.md` (`/mister-pack`).
 
+**Fresh install guides:**
+
+- [install_fresh.md](install_fresh.md) — brand-new system, full shell steps  
+- [install_fresh_grok.md](install_fresh_grok.md) — start inside Grok Build CLI (minimal prompts)
+
 Minimal path from a game list to a MiSTer ao486 pack **without** the converter GUI.
 
 ## Engines vs user data
