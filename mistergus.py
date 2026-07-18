@@ -35,6 +35,84 @@ def _write_dos_text(path: Path, lines: list[str]) -> None:
     path.write_bytes(text.encode("ascii", errors="replace"))
 
 
+# PicoMEM / classic UltraSound default: port 240, DMA 1+1, IRQ 5+5
+# (not the older common IRQ-7 factory default).
+_GUS_ULTRASND_ENV = "240,1,1,5,5"
+
+
+def _patch_gus_irq_dma_defaults(directory: Path) -> int:
+    """Rewrite common GUS config keys from IRQ 7 / odd DMA to IRQ 5 / DMA 1.
+
+    eXo GUS presets often ship Irq=7 (or ULTRASND-style 1,1,7,7). PicoMEM
+    packs standardize on DMA 1,1 and IRQ 5,5.
+    """
+    import re
+
+    if not directory.is_dir():
+        return 0
+    n = 0
+    text_ext = {
+        ".ini",
+        ".cfg",
+        ".inf",
+        ".txt",
+        ".bat",
+    }
+    for path in directory.iterdir():
+        if not path.is_file():
+            continue
+        if path.suffix.lower() not in text_ext:
+            continue
+        try:
+            raw = path.read_bytes()
+        except OSError:
+            continue
+        # Skip obvious binaries
+        if b"\x00" in raw[:200]:
+            continue
+        try:
+            text = raw.decode("latin-1")
+        except Exception:
+            continue
+        orig = text
+        # INI-style Irq=/Dma= (case-insensitive)
+        text = re.sub(
+            r"(?im)^(\s*Irq\s*=\s*)7\s*$",
+            r"\g<1>5",
+            text,
+        )
+        text = re.sub(
+            r"(?im)^(\s*IRQ\s*=\s*)7\s*$",
+            r"\g<1>5",
+            text,
+        )
+        text = re.sub(
+            r"(?im)^(\s*Dma\s*=\s*)[03567]\s*$",
+            r"\g<1>1",
+            text,
+        )
+        text = re.sub(
+            r"(?im)^(\s*DMA\s*=\s*)[03567]\s*$",
+            r"\g<1>1",
+            text,
+        )
+        # Env-style strings if present
+        text = re.sub(
+            r"(?i)ULTRASND\s*=\s*240,\s*1,\s*1,\s*7,\s*7",
+            "ULTRASND=240,1,1,5,5",
+            text,
+        )
+        text = re.sub(
+            r"(?i)ULTRASND\s*=\s*220,\s*1,\s*1,\s*7,\s*7",
+            "ULTRASND=240,1,1,5,5",
+            text,
+        )
+        if text != orig:
+            path.write_bytes(text.replace("\r\n", "\n").replace("\n", "\r\n").encode("latin-1"))
+            n += 1
+    return n
+
+
 def apply_gus_defaults(gameDir: str, logger=None) -> bool:
     """Apply GUS presets under a converted game folder (…/games/<Title>/).
 
@@ -60,6 +138,7 @@ def apply_gus_defaults(gameDir: str, logger=None) -> bool:
         if g.is_dir():
             actions += _copy_tree_files(g, root)
             _write_sel(root / "GUS.SEL")
+            actions += _patch_gus_irq_dma_defaults(root)
             log("applied root %s/ + GUS.SEL" % name)
             break
 
@@ -91,6 +170,7 @@ def apply_gus_defaults(gameDir: str, logger=None) -> bool:
                 actions += _copy_tree_files(gdir, gameSub)
                 _write_sel(gameSub / "GUS.SEL")
                 _write_sel(root / "GUS.SEL")
+                actions += _patch_gus_irq_dma_defaults(gameSub)
                 log("applied %s/%s -> %s" % (rel, gname, rel))
                 break
 
@@ -104,6 +184,7 @@ def apply_gus_defaults(gameDir: str, logger=None) -> bool:
             if gdir.is_dir():
                 actions += _copy_tree_files(gdir, b)
                 _write_sel(b / "GUS.SEL")
+                actions += _patch_gus_irq_dma_defaults(b)
                 actions += 1
                 log("blood tree %s GUS" % blood)
 
@@ -145,9 +226,10 @@ def apply_gus_defaults(gameDir: str, logger=None) -> bool:
     autorun = root / "autorun.bat"
     lines = [
         "@ECHO OFF",
-        "REM Default audio: Gravis UltraSound",
-        "SET ULTRASND=240,1,1,5,5",
+        "REM Default audio: Gravis UltraSound (DMA 1,1 IRQ 5,5)",
+        "SET ULTRASND=%s" % _GUS_ULTRASND_ENV,
         "SET ULTRADIR=C:\\ULTRASND",
+        "IF EXIST C:\\PICOMEM\\PMINIT.EXE C:\\PICOMEM\\PMINIT.EXE /GUS 1",
         "IF EXIST C:\\ULTRASND\\ULTRAMID.EXE C:\\ULTRASND\\ULTRAMID.EXE",
         "IF EXIST GUS\\NUL COPY /Y GUS\\*.* .>NUL",
         "IF EXIST gus\\NUL COPY /Y gus\\*.* .>NUL",
@@ -176,8 +258,9 @@ def _rewrite_run_bat_gus_only(run_bat: Path, text: str) -> bool:
     lines_out = [
         "@ECHO OFF",
         "REM GUS-only launcher (sound menu removed for MiSTer default)",
-        "SET ULTRASND=240,1,1,5,5",
+        "SET ULTRASND=%s" % _GUS_ULTRASND_ENV,
         "SET ULTRADIR=C:\\ULTRASND",
+        "IF EXIST C:\\PICOMEM\\PMINIT.EXE C:\\PICOMEM\\PMINIT.EXE /GUS 1",
     ]
     # Prefer known apply patterns from eXo GUS labels
     body = chunk.splitlines()

@@ -26,7 +26,7 @@ import tempfile
 import zipfile
 
 
-FIXED_VHD_OFFSET = 32256  # 63 * 512 — typical fixed VHD first partition
+FIXED_VHD_OFFSET = 32256  # 63 * 512 - typical fixed VHD first partition
 
 # DOS files required by Top300 CONFIG.SYS / AUTOEXEC.BAT
 _DOS_SUPPLEMENTS = (
@@ -124,9 +124,10 @@ REM Sound Blaster defaults (SB16 @ IRQ 7)
 IF EXIST C:\\DRIVERS\\SBCTL.EXE LOADHIGH C:\\DRIVERS\\SBCTL.EXE I7 T6
 SET BLASTER=A220 I7 D1 H5 P330 T6
 
-REM Gravis UltraSound / PicoGUS (classic ULTRASND env + driver tree)
+REM Gravis UltraSound / PicoGUS (DMA 1,1 + IRQ 5,5 - not 7,7)
 SET ULTRASND=240,1,1,5,5
 SET ULTRADIR=C:\\ULTRASND
+IF EXIST C:\\PICOMEM\\PMINIT.EXE C:\\PICOMEM\\PMINIT.EXE /GUS 1
 
 SET DIRCMD=/A/4/O:GEN
 SET TEMP=C:\\TMP
