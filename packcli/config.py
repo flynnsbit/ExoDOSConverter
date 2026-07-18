@@ -66,16 +66,56 @@ def default_output() -> str:
 
 
 def default_dosassets() -> str:
+    """Resolve dosassets root (contains msdos622/, freedos/, …).
+
+    Order: env → config → sibling of this converter checkout → ~/Projects/dosforge
+    → ~/.dosforge. Prefers a tree that has msdos622 or freedos media.
+    """
     candidates = [
         env_path("DOSFORGE_DOSASSETS_DIR"),
         env_path("MISTER_DOSASSETS"),
         _cfg_str("dosassets"),
-        os.path.expanduser("~/Projects/dosforge/dosassets"),
+        # Sibling of ExoDOSConverter (…/Projects/dosforge/dosassets)
         str(converter_root().parent / "dosforge" / "dosassets"),
+        os.path.expanduser("~/Projects/dosforge/dosassets"),
+        os.path.expanduser("~/.dosforge/dosassets"),
     ]
+
+    def _score(path: str) -> int:
+        p = Path(path)
+        if not p.is_dir():
+            return -1
+        score = 0
+        if (p / "msdos622" / "Disk1.img").is_file() or (
+            p / "msdos622" / "DISK1.IMG"
+        ).is_file():
+            score += 2
+        if (p / "freedos").is_dir():
+            score += 1
+        if (p / "msdos622").is_dir():
+            score += 1
+        return score
+
+    best = ""
+    best_score = -1
     for c in candidates:
-        if c and Path(c).is_dir():
-            return c
+        if not c:
+            continue
+        # Allow pointing at msdos622/ itself
+        p = Path(c).expanduser()
+        if p.is_dir() and p.name.lower() in (
+            "msdos622",
+            "freedos",
+            "msdos71",
+            "msdos5",
+        ):
+            c = str(p.parent)
+        s = _score(c)
+        if s > best_score:
+            best_score = s
+            best = c
+    if best_score >= 0:
+        return str(Path(best).expanduser().resolve())
     return next((c for c in candidates if c), "")
 
 

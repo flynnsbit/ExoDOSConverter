@@ -112,24 +112,42 @@ def run_doctor() -> int:
         )
         failed += 1
 
-    # dosassets
+    # dosassets (root must contain msdos622/Disk1.img and/or freedos/)
     assets = default_dosassets()
     if assets and Path(assets).is_dir():
-        msdos = Path(assets) / "msdos622"
-        freedos = Path(assets) / "freedos"
-        if msdos.is_dir() or Path(assets).name == "msdos622":
-            _ok(f"dosassets: {assets}")
-        elif freedos.is_dir():
-            _ok(f"dosassets (freedos only): {assets}")
-        else:
-            # root dosassets without subdirs named that way
-            _ok(f"dosassets dir exists: {assets}")
-        if not (msdos.is_dir() or (Path(assets) / "Disk1.img").is_file()):
-            if not freedos.is_dir() and Path(assets).name != "freedos":
-                _bad("no msdos622 Disk1.img / freedos under dosassets (VHD create may fail)")
-                failed += 1
+        root = Path(assets)
+        # If user pointed at msdos622/, walk up for display
+        if root.name.lower() == "msdos622" and root.parent.is_dir():
+            root = root.parent
+        msdos = root / "msdos622"
+        disk1 = msdos / "Disk1.img"
+        if not disk1.is_file():
+            disk1 = msdos / "DISK1.IMG"
+        freedos = root / "freedos"
+        _ok(f"dosassets: {root}")
+        if disk1.is_file():
+            _ok(f"msdos622 install disk: {disk1}")
+        elif msdos.is_dir():
+            _bad(
+                f"msdos622/ present but no Disk1.img under {msdos} "
+                "(dosforge msdos622 boot will fail)"
+            )
+            failed += 1
+        if freedos.is_dir():
+            _ok(f"freedos assets: {freedos}")
+        if not disk1.is_file() and not freedos.is_dir():
+            _bad(
+                "no msdos622/Disk1.img or freedos/ under dosassets "
+                f"(expected sibling of converter: "
+                f"{Path(converter_root()).parent / 'dosforge' / 'dosassets'})"
+            )
+            failed += 1
     else:
-        _bad(f"dosassets missing (DOSFORGE_DOSASSETS_DIR): {assets!r}")
+        sibling = Path(converter_root()).parent / "dosforge" / "dosassets"
+        _bad(
+            f"dosassets missing (got {assets!r}); "
+            f"set DOSFORGE_DOSASSETS_DIR or place media at {sibling}"
+        )
         failed += 1
 
     out = default_output()

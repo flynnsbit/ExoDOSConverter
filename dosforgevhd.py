@@ -536,6 +536,117 @@ class DosforgeVhdBuilder:
             return '%dG' % (mib // 1024)
         return '%dM' % mib
 
+    # boot-mode → subdirectory under dosassets/ (dosforge expects Disk*.img there)
+    _BOOT_MODE_ASSET_SUBDIR = {
+        'msdos622': 'msdos622',
+        'msdos71': 'msdos71',
+        'msdos6': 'msdos6',
+        'msdos5': 'msdos5',
+        'msdos33': 'msdos33',
+        'msdos331': 'msdos331',
+        'freedos': 'freedos',
+        'pcdos7': 'pcdos7',
+        'pcdos71': 'pcdos71',
+        'compaq331': 'compaq331',
+        'compaq2': 'compaq2',
+        'compaq3': 'compaq3',
+        'pcdos3': 'pcdos3',
+        'pcdos5': 'pcdos5',
+        'drdos6': 'drdos6',
+        'drdos7': 'drdos7',
+        '4dos': '4dos',
+    }
+
+    def _discoverDosassetsRoot(self):
+        """Find dosassets root: conf → env → sibling dosforge checkout.
+
+        Layout expected::
+
+            <root>/msdos622/Disk1.img
+            <root>/freedos/...
+        """
+        candidates = []
+        conf = str(
+            self.conversionConf.get('misterDosforgeBootAssets', '') or ''
+        ).strip()
+        if conf:
+            candidates.append(os.path.expanduser(conf))
+        envRoot = (os.environ.get('DOSFORGE_DOSASSETS_DIR') or '').strip()
+        if envRoot:
+            candidates.append(os.path.expanduser(envRoot))
+        envAlt = (os.environ.get('MISTER_DOSASSETS') or '').strip()
+        if envAlt:
+            candidates.append(os.path.expanduser(envAlt))
+
+        scriptRoot = os.path.abspath(self.scriptDir)
+        # Sibling of ExoDOSConverter: ~/Projects/dosforge/dosassets
+        candidates.extend(
+            [
+                os.path.join(os.path.dirname(scriptRoot), 'dosforge', 'dosassets'),
+                os.path.normpath(
+                    os.path.join(scriptRoot, '..', 'dosforge', 'dosassets')
+                ),
+                os.path.expanduser('~/Projects/dosforge/dosassets'),
+                os.path.expanduser('~/.dosforge/dosassets'),
+            ]
+        )
+
+        def _normalize_root(path):
+            """Accept either dosassets root or a mode subdir (…/msdos622)."""
+            path = os.path.normpath(os.path.abspath(path))
+            if not os.path.isdir(path):
+                return None
+            base = os.path.basename(path).lower()
+            # User pointed at msdos622/ or freedos/ directly
+            if base in self._BOOT_MODE_ASSET_SUBDIR.values():
+                parent = os.path.dirname(path)
+                if os.path.basename(parent).lower() == 'dosassets' or os.path.isdir(
+                    os.path.join(parent, 'freedos')
+                ) or os.path.isdir(os.path.join(parent, 'msdos622')):
+                    return parent
+                # Still usable as a single-mode tree; treat parent as root if it
+                # looks like a collection of version dirs, else return parent.
+                return parent if os.path.isdir(parent) else path
+            # Looks like dosassets root if it has known subdirs or readme
+            for sub in ('msdos622', 'freedos', 'msdos71', 'msdos5'):
+                if os.path.isdir(os.path.join(path, sub)):
+                    return path
+            if os.path.isfile(os.path.join(path, 'readme.txt')):
+                return path
+            # Accept any existing dir as last resort
+            return path
+
+        for c in candidates:
+            if not c:
+                continue
+            root = _normalize_root(c)
+            if root:
+                return root
+        return None
+
+    def _resolveDosassetsForBootMode(self, bootMode):
+        """Return (assets_root, path_for_--boot-assets-path).
+
+        dosforge's ``--boot-assets-path`` must point at the **mode directory**
+        that contains Disk1.img (e.g. ``…/dosassets/msdos622``), not the
+        parent ``dosassets/`` root.  If we only set the env root and omit the
+        flag, dosforge resolves ``msdos622`` via ``DOSFORGE_DOSASSETS_DIR``.
+        """
+        root = self._discoverDosassetsRoot()
+        if not root:
+            return None, None
+        mode = (bootMode or '').strip().lower()
+        sub = self._BOOT_MODE_ASSET_SUBDIR.get(mode)
+        if sub:
+            modePath = os.path.join(root, sub)
+            if os.path.isdir(modePath):
+                return root, modePath
+        # Mode subdir missing: pass root and hope, or freedos fallback
+        freedos = os.path.join(root, 'freedos')
+        if mode in ('auto', '') and os.path.isdir(freedos):
+            return root, freedos
+        return root, root if os.path.isdir(root) else None
+
     def _runDosforgeCreate(
         self,
         *,
@@ -567,25 +678,25 @@ class DosforgeVhdBuilder:
             '--overwrite',
         ]
 
-        bootAssets = str(self.conversionConf.get('misterDosforgeBootAssets', '') or '').strip()
-        if bootAssets:
-            cmd.extend(['--boot-assets-path', bootAssets])
-
         env = os.environ.copy()
-        # Prefer sibling dosforge/dosassets when present and env not already set.
-        if 'DOSFORGE_DOSASSETS_DIR' not in env:
-            scriptRoot = os.path.abspath(self.scriptDir)
-            candidates = [
-                os.path.join(os.path.dirname(scriptRoot), 'dosforge', 'dosassets'),
-                os.path.expanduser('~/Projects/dosforge/dosassets'),
-                os.path.join(scriptRoot, '..', 'dosforge', 'dosassets'),
-            ]
-            for candidate in candidates:
-                candidate = os.path.normpath(candidate)
-                if os.path.isdir(candidate):
-                    env['DOSFORGE_DOSASSETS_DIR'] = candidate
-                    self.logger.log('  Using dosassets: %s' % candidate)
-                    break
+        assetsRoot, assetsModePath = self._resolveDosassetsForBootMode(bootMode)
+        if assetsRoot:
+            # dosforge looks for Disk1.img *inside* the path we pass — so for
+            # msdos622 we must pass .../dosassets/msdos622, not the parent root.
+            # Also set DOSFORGE_DOSASSETS_DIR so bare-name fallbacks work.
+            env['DOSFORGE_DOSASSETS_DIR'] = assetsRoot
+            if assetsModePath:
+                cmd.extend(['--boot-assets-path', assetsModePath])
+            self.logger.log(
+                '  Using dosassets root: %s (boot-mode path: %s)'
+                % (assetsRoot, assetsModePath or '(auto)')
+            )
+        else:
+            self.logger.log(
+                '  <WARNING> no dosassets found (env/config/sibling); '
+                'dosforge may fail to install DOS',
+                self.logger.WARNING,
+            )
 
         self.logger.log('  Running: %s' % ' '.join(cmd))
         try:
