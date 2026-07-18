@@ -1,9 +1,21 @@
-# Copy to ~/.config/mister-pack/config.toml and edit paths.
+# Copy to ~/.config/mister-pack/config.toml and edit paths,
+# or let `python3 -m packcli setup --collection … --dosassets …` write them.
+#
+# Open-source engines (dosforge + ExoDOSConverter) are installed/updated by:
+#   python3 -m packcli setup
+# eXoDOS collection and dosassets are NEVER auto-downloaded — local paths only.
 # Environment variables always override these values.
 
+# eXoDOS root (must contain eXo/eXoDOS/) — user-supplied
 collection = "/mnt/net/exodos/eXoDOS"
+
+# MS-DOS / FreeDOS install media root (msdos622/ and/or freedos/) — user-supplied
 dosassets = "/home/shawn/Projects/dosforge/dosassets"
+
 output = "/home/shawn/Projects/ExoDOSConverter/out/mister-packs"
+
+# Optional: converter checkout (set automatically by setup)
+# converter = "/home/shawn/Projects/ExoDOSConverter"
 
 # AUTOEXEC audio mode: "sb" or "gus"
 #   sb  → SET BLASTER=A220 I7 D1 H5 P330 T6

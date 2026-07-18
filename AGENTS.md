@@ -74,6 +74,17 @@ Optional conf keys: `misterUseDosforge`, `misterDosforgeExecutable`,
 `misterBootMode` (default `auto`), `misterDosInstallProfile`,
 `misterDosforgeBootAssets`, `misterSaveBufferMiB`.
 
+## mister-pack (headless MiSTer packs)
+
+Production CLI + Grok skill: `python3 -m packcli …` — see `docs/MISTER_PACK.md`
+and `.grok/skills/mister-pack/SKILL.md`.
+
+- **Open-source engines** (dosforge + ExoDOSConverter): install/update with
+  `python3 -m packcli setup` (latest dosforge release + converter master).
+- **eXoDOS collection and dosassets**: user-supplied local paths only — never
+  auto-downloaded. Ask once if unset; save via `setup --collection` / config.
+- Packcli deps: `requirements-packcli.txt` (not the legacy GUI pin freeze).
+
 ## Other instruction sources
 
 - `.github/copilot-instructions.md` — full architecture and conventions reference

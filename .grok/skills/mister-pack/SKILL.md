@@ -4,17 +4,32 @@ description: >
   Build production MiSTer ao486 packs from eXoDOS games via ExoDOSConverter +
   dosforge (VHD + external cd/floppy, MyMenu, optional GUS/PicoMEM). Use when
   the user runs /mister-pack, asks to "create a pack", "build a VHD", "MiSTer
-  pack", "eXoDOS convert to VHD", or wants games on a bootable DOS disk image
-  with MyMenu.
+  pack", "eXoDOS convert to VHD", install/update pack tools, or wants games on
+  a bootable DOS disk image with MyMenu. Open-source engines (dosforge +
+  ExoDOSConverter) install/update via `packcli setup`; eXoDOS collection is
+  user-supplied only (never downloaded).
 ---
 
 # mister-pack — full feature & usage guide
 
 Production path: **recipe → convert → dosforge VHD**. Stay in Grok CLI. Do **not** open the ExoDOSConverter GUI or run test suites for normal packs.
 
-**Converter root (this machine):** `/home/shawn/Projects/ExoDOSConverter`  
 **CLI:** `python3 -m packcli …` or `python3 scripts/mister-pack …`  
-**Slash:** `/mister-pack`
+**Slash:** `/mister-pack`  
+**Skill path:** `.grok/skills/mister-pack/SKILL.md` (synced docs: `docs/MISTER_PACK_SKILL.md`)
+
+---
+
+## 0. Open-source engines vs user data (critical)
+
+| Category | What | How it is obtained |
+|----------|------|--------------------|
+| **Open-source engines** | **dosforge**, **ExoDOSConverter** (+ packcli Python deps) | **`python3 -m packcli setup`** — installs or updates to the latest from GitHub |
+| **User-supplied data** | **eXoDOS collection**, **dosassets** (MS-DOS/FreeDOS install media) | **User local paths only** — never auto-downloaded |
+
+- If dosforge or the converter is missing or outdated → run **`setup`** (or `setup --force`).
+- If collection path is unknown → **ask the user once** for the eXoDOS root (must contain `eXo/eXoDOS/`). Do **not** search the web for game packs or attempt to fetch the collection.
+- dosassets (boot floppies under `msdos622/` / `freedos/`) are also local; ask if missing.
 
 ---
 
@@ -45,85 +60,110 @@ Inside the VHD (typical):
 
 ## 2. One-time setup
 
-### Required software
+### Bootstrap (preferred)
 
-| Need | Notes |
-|------|--------|
-| Python 3.10+ | Converter + packcli |
-| `dosforge` on PATH | `pip install` / sibling `~/Projects/dosforge` |
-| ExoDOSConverter checkout | This repo |
-| eXoDOS v6 tree | Must contain `eXo/eXoDOS/` game zips |
-| dosforge dosassets | `msdos622/` (Disk1.img…) and/or `freedos/` |
-| Linux `sudo -n` for NBD | Headless VHD create |
-
-### Environment (session or shell profile)
+From any machine with Python 3.10+ and network:
 
 ```bash
-export EXODOS_COLLECTION=/mnt/net/exodos/eXoDOS
-export DOSFORGE_DOSASSETS_DIR=~/Projects/dosforge/dosassets
-# optional:
-export MISTER_PACK_OUT=~/Projects/ExoDOSConverter/out/mister-packs
-export MISTER_PACK_AUDIO=sb    # or gus — default AUTOEXEC audio
-cd /home/shawn/Projects/ExoDOSConverter
-```
-
-### Optional user config file
-
-Copy and edit:
-
-```bash
-mkdir -p ~/.config/mister-pack
-cp recipes/example-config.toml ~/.config/mister-pack/config.toml
-```
-
-Example `~/.config/mister-pack/config.toml`:
-
-```toml
-collection = "/mnt/net/exodos/eXoDOS"
-dosassets  = "/home/shawn/Projects/dosforge/dosassets"
-output     = "/home/shawn/Projects/ExoDOSConverter/out/mister-packs"
-
-# Default AUTOEXEC sound mode when recipe does not set options.audio:
-#   "sb"  or  "gus"
-audio = "sb"
-```
-
-**Precedence (highest wins):** recipe `options.audio` → env `MISTER_PACK_AUDIO` → config.toml `audio` → `sb`.
-
-### Health check (always run first if unsure)
-
-```bash
-python3 -m packcli doctor
-```
-
-Must report OK for: Python, dosforge, boot-c.zip, distro.zip, eXoDOSv6.csv, collection, dosassets. Fix failures before building.
-
-### Install / update open-source engines (not the game collection)
-
-```bash
-# Install or update dosforge (latest GitHub release) + ExoDOSConverter (git master)
+# 1) Install or update open-source engines from GitHub
 python3 -m packcli setup
 
-# Also save your eXoDOS + dosassets paths into ~/.config/mister-pack/config.toml
+# 2) Record your local eXoDOS + dosassets paths (never downloaded)
 python3 -m packcli setup \
   --collection /path/to/eXoDOS \
   --dosassets ~/Projects/dosforge/dosassets \
   --audio gus
 
-# Force reinstall/update
-python3 -m packcli setup --force
+# 3) Verify
+python3 -m packcli doctor
 ```
 
-| Auto-installed / updated | User must supply (never downloaded) |
-|--------------------------|-------------------------------------|
-| **dosforge** (latest release tag via pip+git) | **eXoDOS collection** path |
-| **ExoDOSConverter** (git clone/pull master + pip deps) | **dosassets** (MS-DOS/FreeDOS floppies) |
-| packcli Python deps | |
+If you do not yet have a converter checkout, either:
 
-When the user has not set a collection path, **ask once** for the eXoDOS root (folder containing `eXo/eXoDOS/`), then run `setup --collection …` or write `config.toml`.
+- Clone once: `git clone https://github.com/flynnsbit/ExoDOSConverter.git && cd ExoDOSConverter`, then `python3 -m packcli setup`, or  
+- Point `setup --converter-dir ~/Projects/ExoDOSConverter` and let setup clone/update there.
+
+### What `setup` installs / updates
+
+| Component | Source of truth | Action when outdated |
+|-----------|-----------------|----------------------|
+| **dosforge** | Latest **GitHub release** tag (`flynnsbit/dosforge`) | `pip install` from `git+…@vX.Y.Z` |
+| **ExoDOSConverter** | **git master** tip (`flynnsbit/ExoDOSConverter`) | `git pull --ff-only` (or clone); `--force` → hard reset to `origin/master` |
+| **packcli deps** | `requirements-packcli.txt` (modern PyYAML/Pillow/requests) | `pip install -r …` |
+
+`setup` does **not** fetch eXoDOS games or DOS install floppies.
+
+### What you must supply
+
+| Path | Meaning | How to set |
+|------|---------|------------|
+| **collection** | eXoDOS root containing `eXo/eXoDOS/` | `setup --collection`, `config.toml`, or `EXODOS_COLLECTION` |
+| **dosassets** | Folder with `msdos622/` and/or `freedos/` | `setup --dosassets`, `config.toml`, or `DOSFORGE_DOSASSETS_DIR` |
+
+### Prerequisites (host)
+
+| Need | Notes |
+|------|--------|
+| Python 3.10+ | packcli + converter |
+| Network | First setup / updates (GitHub) |
+| `git` | Clone/pull ExoDOSConverter |
+| Linux `sudo -n` for NBD | Headless VHD create (doctor soft-warns if missing) |
+
+### User config (`~/.config/mister-pack/config.toml`)
+
+Written/updated by `setup --collection …` / `--dosassets …` / `--audio …`, or copy `recipes/example-config.toml`:
+
+```toml
+# User-supplied only — never auto-downloaded
+collection = "/mnt/net/exodos/eXoDOS"
+dosassets  = "/home/you/Projects/dosforge/dosassets"
+output     = "/home/you/mister-out"
+converter  = "/home/you/Projects/ExoDOSConverter"   # optional; set by setup
+
+# Default AUTOEXEC sound when recipe omits options.audio:
+#   "sb" or "gus"
+audio = "sb"
+```
+
+**Precedence (highest wins):** recipe `options.audio` → env `MISTER_PACK_AUDIO` → config.toml `audio` → `sb`.
+
+Env overrides for paths: `EXODOS_COLLECTION`, `DOSFORGE_DOSASSETS_DIR`, `MISTER_PACK_OUT`, `MISTER_PACK_CONVERTER`.
+
+### Health check
+
+```bash
+python3 -m packcli doctor
+```
+
+Must report OK for: Python, dosforge, boot-c.zip, distro.zip, eXoDOSv6.csv, collection, dosassets.  
+If engines are missing/old → **`python3 -m packcli setup`**.  
+If collection fails → **ask user for path**; do not download games.
+
 ---
 
 ## 3. CLI reference
+
+### `setup` — install / update engines (+ optional path config)
+
+```bash
+python3 -m packcli setup
+python3 -m packcli setup --force
+python3 -m packcli setup --collection /path/to/eXoDOS --dosassets /path/to/dosassets --audio gus
+python3 -m packcli setup --converter-dir ~/Projects/ExoDOSConverter
+python3 -m packcli setup --skip-dosforge    # only update converter
+python3 -m packcli setup --skip-converter   # only update dosforge
+```
+
+| Flag | Meaning |
+|------|---------|
+| `--force` | Reinstall/update even if versions match; converter: `git reset --hard origin/master` |
+| `--converter-dir` | Clone/update target (default: this tree or `~/Projects/ExoDOSConverter`) |
+| `--collection` | Save eXoDOS root to config (**not** downloaded) |
+| `--dosassets` | Save dosassets path to config (**not** downloaded) |
+| `--audio sb\|gus` | Default AUTOEXEC audio in config |
+| `--skip-dosforge` / `--skip-converter` | Update only one engine |
+
+Runs a post-setup **doctor** when possible.
 
 ### `doctor`
 
@@ -131,7 +171,8 @@ When the user has not set a collection path, **ask once** for the eXoDOS root (f
 python3 -m packcli doctor
 ```
 
-Checks collection path, dosforge, converter payloads (`boot-c.zip`, `distro.zip`, ULTRASND, PICOMEM), dosassets, sudo.
+Checks collection path, dosforge, converter payloads (`boot-c.zip`, `distro.zip`, ULTRASND, PICOMEM), dosassets, sudo.  
+On failure, prints hint to run `setup` and/or set `--collection`.
 
 ### `resolve` — fuzzy title → exact eXo name
 
@@ -219,7 +260,7 @@ Shipped example: `recipes/gus-classics.yaml` (11 GUS classics).
 |-------|----------|-------------|
 | `name` | yes | Pack / VHD base name |
 | `games` | yes | Exact eXo titles (from `resolve`) |
-| `collection` | if env unset | eXoDOS root |
+| `collection` | if env/config unset | eXoDOS root (user path) |
 | `output` | no | Output root (default from config/env) |
 | `options.audio` | no | `sb` or `gus` |
 | `options.boot` | no | `auto` / `msdos622` / `freedos` |
@@ -292,16 +333,18 @@ No full convert required.
 
 ## 7. Agent workflow (when user prompts in chat)
 
-### A. First-time / “is my machine ready?”
+### A. First-time / “is my machine ready?” / “install or update tools”
 
-1. `python3 -m packcli setup` — install/update dosforge + ExoDOSConverter from GitHub.
-2. If collection unknown, **ask the user** where eXoDOS is installed (never download it).
-3. `python3 -m packcli setup --collection /their/path --dosassets /their/dosassets`
-4. `python3 -m packcli doctor` — all required checks green.
+1. Run **`python3 -m packcli setup`** — install or update **dosforge** (latest release) and **ExoDOSConverter** (git master). Network required.
+2. If collection path is unknown, **ask the user once**: “Where is your eXoDOS root?” (folder that contains `eXo/eXoDOS/`). **Never download the collection.**
+3. If dosassets unknown, ask for that path (or default after dosforge install if present under the dosforge tree).
+4. `python3 -m packcli setup --collection /their/path --dosassets /their/dosassets` (optional `--audio sb|gus`).
+5. `python3 -m packcli doctor` — all required checks green before first build.
+6. Later sessions: re-run **`setup`** when the user asks to update tools, or when doctor shows missing/outdated engines.
 
 ### B. “Make a pack with these games…”
 
-1. `doctor` if not green this session.
+1. `doctor` if not green this session; if engines missing → `setup` first.
 2. `resolve` each fuzzy name → exact titles.
 3. Write `recipe.yaml` (use `audio: gus` or `sb` from user intent; default config otherwise).
 4. `python3 -m packcli build -f recipe.yaml`
@@ -337,7 +380,10 @@ python3 -m packcli patch-autoexec <vhd> --audio sb   # or gus
 | User says | Agent does |
 |-----------|------------|
 | `/mister-pack doctor` | `python3 -m packcli doctor` |
-| Install / update tools | `python3 -m packcli setup` (+ ask for eXoDOS path if unset) |
+| Install / update tools / get latest dosforge | `python3 -m packcli setup` (+ ask for eXoDOS path if unset) |
+| Update ExoDOSConverter only | `python3 -m packcli setup --skip-dosforge` |
+| Update dosforge only | `python3 -m packcli setup --skip-converter` |
+| Where should my eXoDOS go? | Explain: local path only; never auto-downloaded; save with `setup --collection` |
 | Create GUS pack with DOOM and Blood | resolve → recipe `audio: gus` → build |
 | Pack with SB only | recipe `audio: sb` → build |
 | What’s the exact name for raptor? | `resolve raptor` → print best title |
@@ -352,7 +398,8 @@ python3 -m packcli patch-autoexec <vhd> --audio sb   # or gus
 
 | Symptom | Fix |
 |---------|-----|
-| `doctor` collection fail | Set `EXODOS_COLLECTION` or `config.toml` `collection` to eXoDOS root (`eXo/eXoDOS` must exist) |
+| `doctor` missing dosforge / old engines | `python3 -m packcli setup` (or `--force`) |
+| `doctor` collection fail | Ask user for eXoDOS root; `setup --collection /path` or set `EXODOS_COLLECTION` / config `collection` (`eXo/eXoDOS` must exist) |
 | No games matched | `resolve`; use exact CSV title with year |
 | Blood CD empty | Conf typo `BLOOD121` vs on-disk `BLOODCD1` — fixed in converter; rebuild pack if old |
 | dosforge “boot assets” error | `DOSFORGE_DOSASSETS_DIR` = dosassets **root** (with `msdos622/` / `freedos/`) |
@@ -360,6 +407,8 @@ python3 -m packcli patch-autoexec <vhd> --audio sb   # or gus
 | Convert OK, VHD fail | `rebuild-vhd` with correct `--dosassets` and `--audio` |
 | GUS IRQ 7 in game | Env is 5,5; eXo presets patched when `prefer_gus`; re-apply via rebuild or new build |
 | Need only AUTOEXEC sound change | `patch-autoexec --audio sb\|gus` |
+| `git pull` failed on converter | Local changes; commit/stash or `setup --force` (hard reset) |
+| pip / Pillow pin errors | Use `requirements-packcli.txt` via `setup` (not legacy `requirements.txt` freeze) |
 
 ---
 
@@ -367,10 +416,12 @@ python3 -m packcli patch-autoexec <vhd> --audio sb   # or gus
 
 - Do not open the converter GUI for this workflow  
 - Do not run full dosforge/converter test suites for pack builds  
+- Do **not** download or ship the eXoDOS game collection — user path only  
 - Do not clone eXoDOS into git or ship game zips  
 - Do not rebuild MyMenu from Pascal unless `distro.zip` is missing  
 - Do not invent setup files — use eXo GUS folders + standard env  
 - Do not invent collection/dosassets paths; ask user or use config  
+- Do not manually pin ancient converter `requirements.txt` (Pillow 9.x) for packcli; use `setup` / `requirements-packcli.txt`  
 
 ---
 
@@ -392,9 +443,11 @@ CD mounts use `imgtry` paths like `/cd/Blood/BLOODCD1.cue` relative to that fold
 ## 12. Quick start (copy-paste)
 
 ```bash
-export EXODOS_COLLECTION=/mnt/net/exodos/eXoDOS
-export DOSFORGE_DOSASSETS_DIR=~/Projects/dosforge/dosassets
-cd ~/Projects/ExoDOSConverter
+# Engines: latest dosforge release + ExoDOSConverter master
+python3 -m packcli setup \
+  --collection /mnt/net/exodos/eXoDOS \
+  --dosassets ~/Projects/dosforge/dosassets \
+  --audio gus
 
 python3 -m packcli doctor
 python3 -m packcli resolve doom blood
@@ -409,3 +462,5 @@ python3 -m packcli patch-autoexec \
 Or in Grok:
 
 > /mister-pack create a GUS pack named Demo with DOOM and Blood; put output under out/demo
+
+> /mister-pack install or update tools, then doctor
