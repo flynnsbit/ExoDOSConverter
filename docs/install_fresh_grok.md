@@ -1,139 +1,196 @@
 # Install & first pack from Grok Build CLI (minimal)
 
-For a non-expert starting **inside Grok Build**. Goal: as few questions as possible; the agent runs almost everything. You only answer when something cannot be guessed, and only leave Grok for things the agent cannot fix alone (rare).
+For a non-expert. Goal: as few questions as possible; Grok runs almost everything after a **one-time shell bootstrap** that gives you the skill.
 
-**Related:** [full shell install](install_fresh.md) · [mister-pack overview](MISTER_PACK.md) · skill: `/mister-pack`
+**Related:** [full shell install](install_fresh.md) · [mister-pack overview](MISTER_PACK.md)
 
 ---
 
-## What you need on the machine (once)
+## Important: `/mister-pack` is not built into Grok
 
-Grok cannot invent these. Have them before you start:
+A brand-new Grok install **does not** include the mister-pack skill.
+
+`/mister-pack` appears only after Grok can **see** the skill files. That happens when either:
+
+| How | Where the skill lives | When `/mister-pack` works |
+|-----|------------------------|---------------------------|
+| **Recommended** | Inside the ExoDOSConverter git repo: `.grok/skills/mister-pack/` | You start Grok **from that repo** (cwd is the project) |
+| Optional | `~/.grok/skills/mister-pack/` (user-wide copy) | Any directory, any project |
+
+So the real first-time path is:
+
+```text
+1. Shell once  →  clone repo  →  start Grok inside it   (skill loads)
+2. Inside Grok →  /mister-pack or plain English          (setup + build)
+```
+
+You do **not** need to “install an agent package” separately. Cloning the open-source repo **is** how you get the skill.
+
+---
+
+## Phase 0 — Shell once (get Grok + skill)
+
+Do this in a normal terminal **before** expecting `/mister-pack` to exist.
+
+### 0a. Install Grok Build CLI (if you don’t have it)
+
+Follow current Grok install docs for your machine, then confirm:
+
+```bash
+grok --version   # or however you launch the TUI on your system
+```
+
+You need a working Grok session that can run shell commands.
+
+### 0b. Clone ExoDOSConverter (this delivers the skill)
+
+```bash
+mkdir -p ~/Projects
+cd ~/Projects
+git clone https://github.com/flynnsbit/ExoDOSConverter.git
+cd ExoDOSConverter
+```
+
+That checkout includes:
+
+```text
+.grok/skills/mister-pack/SKILL.md   ← this is the /mister-pack skill
+packcli/                            ← setup / doctor / build CLI
+```
+
+### 0c. Start Grok **from inside the repo**
+
+```bash
+cd ~/Projects/ExoDOSConverter
+grok
+```
+
+Grok discovers project skills under `.grok/skills/`. After a few seconds you should see **`/mister-pack`** when you type `/` (or use plain English about MiSTer packs — the skill description also triggers on those phrases).
+
+**Check:** type `/` and look for `mister-pack`.  
+If it’s missing: confirm you’re in the repo root (`ls .grok/skills/mister-pack/SKILL.md`) and restart Grok from that directory.
+
+### Optional: install the skill for every project
+
+If you want `/mister-pack` even when Grok’s cwd is not the converter repo:
+
+```bash
+mkdir -p ~/.grok/skills
+cp -a ~/Projects/ExoDOSConverter/.grok/skills/mister-pack ~/.grok/skills/
+```
+
+Still keep the converter checkout for `packcli` and data files; the skill tells Grok how to run them.
+
+---
+
+## What you need on the machine (games data)
+
+Grok will install **open-source tools**. It will **not** download games.
 
 | Need | Plain English |
 |------|----------------|
-| **eXoDOS** | Your game collection folder. Inside it you should see an `eXo` folder (and under that `eXoDOS`). |
-| **dosassets** | Folder with MS-DOS / FreeDOS install images (`msdos622` and/or `freedos`). Often next to a dosforge install. |
-| **Linux + internet** | So tools can be downloaded and the VHD can be built. |
-| **Passwordless sudo** (recommended) | So disk image creation does not stop and wait for a password. In a normal terminal: `sudo -n true` should print nothing and succeed. |
+| **eXoDOS** | Your game collection folder. Inside it: `eXo/eXoDOS/`. |
+| **dosassets** | Folder with MS-DOS / FreeDOS install images (`msdos622` and/or `freedos`). |
+| **Internet** | First setup pulls dosforge + updates from GitHub. |
+| **Passwordless sudo** (recommended) | So VHD create doesn’t stop for a password. Test: `sudo -n true` |
 
-You do **not** need to know pip, git remotes, or the converter GUI.
+You do **not** need the converter GUI or to know pip/git remotes for day-to-day use.
 
 ---
 
-## What the agent installs for you
+## Phase 1 — Inside Grok (skill is loaded)
 
-When you use `/mister-pack` or ask to set up / build a pack, the agent runs:
+### What the agent installs for you
 
 ```text
 python3 -m packcli setup
 ```
 
-That **installs or updates** (from GitHub):
+Installs or updates from GitHub:
 
 - **dosforge** (latest release)
-- **ExoDOSConverter** (latest master + Python deps)
+- **ExoDOSConverter** tip + packcli Python deps (if this tree is a git clone)
 
-It **never** downloads the eXoDOS games. Those stay your folder.
+Never downloads the eXoDOS collection.
 
----
+### What you type (minimal)
 
-## Your experience (what you do vs what Grok does)
-
-### You type one of these in Grok
-
-**First time on this machine:**
-
-> /mister-pack set me up for MiSTer packs. My eXoDOS is at `/paste/your/path` and dosassets at `/paste/your/path`. Use GUS audio.
-
-**If you do not know the paths:**
-
-> /mister-pack set me up for MiSTer packs. I don’t know my paths yet.
-
-**Later, just build:**
-
-> /mister-pack create a GUS pack named Demo with DOOM and Blood
-
----
-
-### What the agent does (you mostly wait)
-
-| Step | Agent action | You only if… |
-|------|----------------|--------------|
-| 1 | Find or clone ExoDOSConverter; `cd` there | — |
-| 2 | `python3 -m packcli setup` (engines from GitHub) | Network/firewall blocks GitHub → fix network outside Grok |
-| 3 | Save paths into `~/.config/mister-pack/config.toml` | **Prompt:** “Where is your eXoDOS?” and optionally dosassets |
-| 4 | `python3 -m packcli doctor` | doctor fails on **sudo** → see “Drop back to shell” below |
-| 5 | `resolve` game names → write a small recipe | You pick titles / SB vs GUS if you didn’t say |
-| 6 | `python3 -m packcli build -f …` | Build fails with a clear error → agent retries or asks one question |
-| 7 | Print the folder path to copy to the MiSTer SD | You copy files to the SD card (or ask agent to `cp` if the SD is mounted) |
-
-**Typical prompts (only when needed):**
-
-1. **“What is the full path to your eXoDOS folder?”**  
-   Hint: the folder that contains `eXo` → `eXoDOS`.  
-   Example answer: `/mnt/media/eXoDOS`
-
-2. **“What is the path to dosassets?”**  
-   Hint: folder that contains `msdos622` or `freedos`.  
-   Example: `/home/you/Projects/dosforge/dosassets`
-
-3. **“Sound Blaster or GUS?”** if you didn’t say — default **sb** unless you want UltraSound / PicoGUS (**gus**).
-
-That’s it for most people.
-
----
-
-## Recommended first conversation (copy-paste)
-
-Paste this whole block into Grok (edit the two paths):
+**First time — paths known:**
 
 ```text
 /mister-pack
 
 I'm new. Please:
-1. Install or update dosforge and ExoDOSConverter with packcli setup
+1. Run packcli setup; install/update dosforge + converter
 2. Save collection = /REPLACE/WITH/YOUR/eXoDOS
 3. Save dosassets = /REPLACE/WITH/YOUR/dosassets
 4. Default audio gus
 5. Run doctor
-6. If doctor is green, resolve "doom" and "blood", then build a small pack named FirstPack with those two games
-7. Tell me the exact folder to copy to my MiSTer SD card
+6. If green, resolve "doom" and "blood", build pack FirstPack with those games
+7. Tell me the folder to copy to the MiSTer SD
 
-Do not download the eXoDOS collection. Ask me if a path is wrong.
+Do not download the eXoDOS collection. Ask if a path is wrong.
 ```
 
-If you prefer the agent to ask for paths:
+**First time — paths unknown:**
 
 ```text
-/mister-pack set up tools and walk me through my first pack.
-I have eXoDOS and dosassets on this PC but I need you to ask me for the paths.
+/mister-pack set me up for MiSTer packs.
+I have eXoDOS and dosassets on this PC; please ask me for the paths.
 Use GUS. Keep steps simple.
 ```
+
+**No slash yet?** (skill loaded but you forget the name) — plain English still works:
+
+```text
+Set up MiSTer pack tools and build a small GUS pack with DOOM and Blood.
+```
+
+**Later builds** (config already saved):
+
+```text
+/mister-pack create a GUS pack named Demo with DOOM and Blood
+```
+
+### What the agent does (you mostly wait)
+
+| Step | Agent action | You only if… |
+|------|----------------|--------------|
+| 1 | Use this repo; run `python3 -m packcli setup` | Network blocks GitHub |
+| 2 | Save paths to `~/.config/mister-pack/config.toml` | **Prompt:** eXoDOS path / dosassets path |
+| 3 | `python3 -m packcli doctor` | sudo / missing host packages (shell fix below) |
+| 4 | `resolve` titles → write recipe | You pick games / SB vs GUS if unset |
+| 5 | `python3 -m packcli build -f …` | Fixable build error → agent retries or one question |
+| 6 | Print output folder for the SD card | You copy (or ask agent to `cp` if SD is mounted) |
+
+**Typical prompts (only when needed):**
+
+1. Full path to eXoDOS (folder that contains `eXo/eXoDOS/`)
+2. Path to dosassets (`msdos622` or `freedos` inside)
+3. Sound Blaster (**sb**) or GUS (**gus**) if you didn’t say
 
 ---
 
 ## When you must drop back to a real shell
 
-Only these cases. The agent should tell you the exact command.
+### Skill / Grok not ready
 
-### A. Passwordless sudo not set up
+```bash
+cd ~/Projects/ExoDOSConverter   # must be here for project skill
+ls .grok/skills/mister-pack/SKILL.md
+grok                            # restart from repo root
+```
 
-Symptom: doctor warns about `sudo -n`, or VHD create hangs/fails on NBD.
-
-In a normal terminal (not always possible from Grok):
+### Passwordless sudo
 
 ```bash
 sudo -n true
 ```
 
-If that fails, configure passwordless sudo for your user (distro-specific), then return to Grok and say:
+If that fails, fix sudo for your user, then in Grok:  
+> sudo is fixed — run doctor and continue
 
-> sudo is fixed — run doctor and continue the build
-
-### B. Host packages missing (rare)
-
-If setup/doctor says `git` or `python3` is missing, in a terminal:
+### Host packages missing
 
 ```bash
 # Debian/Ubuntu example
@@ -141,73 +198,75 @@ sudo apt update
 sudo apt install -y python3 python3-pip git nbd-client qemu-utils
 ```
 
-Then in Grok:
-
+Then in Grok:  
 > packages installed — run setup and doctor again
 
-### C. eXoDOS or dosassets not on this machine yet
+### eXoDOS / dosassets not on this PC
 
-Grok will **not** download them. You must obtain eXoDOS and DOS install media yourself, put them on disk, then give Grok the paths.
+Obtain them yourself, put them on disk, give Grok the paths. Never auto-downloaded.
 
-### D. Copy pack to SD card
+### Copy pack to SD
 
-Agent will print something like:
+Agent prints something like:
 
 ```text
-/home/you/Projects/ExoDOSConverter/out/mister-packs/FirstPack/ao486/FirstPack/
+…/out/mister-packs/FirstPack/ao486/FirstPack/
 ```
 
-Copy **that whole folder** (`.vhd` **and** `cd/` if present) onto the MiSTer SD under `games/ao486/`.  
-If the SD is already mounted in Linux, you can ask Grok:
+Copy that **whole** folder (`.vhd` and `cd/` if present) to the MiSTer SD under `games/ao486/`.
 
-> The SD is mounted at /media/me/MISTER — copy the pack there for me
+---
+
+## End-to-end picture (new user)
+
+```text
+SHELL (once)
+  install Grok CLI
+  git clone flynnsbit/ExoDOSConverter
+  cd ExoDOSConverter
+  grok                          ← skill loads from .grok/skills/mister-pack/
+
+GROK (after that)
+  /mister-pack  or  plain English
+       │
+       ├─ packcli setup     → dosforge + converter (open source)
+       ├─ ask paths once    → eXoDOS + dosassets (your data)
+       ├─ doctor
+       ├─ resolve + build
+       └─ “here is the folder for your SD card”
+```
+
+| Automatic | You supply |
+|-----------|------------|
+| Skill (via clone + start Grok in repo) | eXoDOS path |
+| dosforge + ExoDOSConverter updates | dosassets path |
+| packcli workflow | Game list / pack name when you want a pack |
 
 ---
 
 ## After the first successful pack
 
-You can stay in Grok forever for normal work:
+Stay in Grok (still best from the ExoDOSConverter directory, unless you installed the skill under `~/.grok/skills/`):
 
 | You say | Agent runs |
 |---------|------------|
 | “Update the tools” | `python3 -m packcli setup` |
 | “Is everything ready?” | `python3 -m packcli doctor` |
-| “What’s the exact name for raptor?” | `python3 -m packcli resolve raptor` |
+| “Exact name for raptor?” | `resolve raptor` |
 | “Make a pack with …” | resolve → recipe → `build` |
-| “Switch this VHD to Sound Blaster” | `patch-autoexec … --audio sb` |
-| “Only rebuild the VHD” | `rebuild-vhd …` |
+| “Switch this VHD to SB” | `patch-autoexec --audio sb` |
 
-No need to re-enter paths if `config.toml` was saved once.
-
----
-
-## Mental model (one picture)
-
-```text
-  YOU (once)                    GROK / packcli (automatic)
-  ──────────                    ─────────────────────────
-  eXoDOS folder  ─────────────► path saved in config
-  dosassets      ─────────────► path saved in config
-  “make a pack”  ─────────────► setup (if needed)
-                                doctor
-                                resolve titles
-                                build VHD + cd/
-                                tell you the output folder
-```
-
-**Open source tools** = fetched and updated for you.  
-**Your games and DOS media** = your folders only.
+No need to re-enter paths if config was saved once.
 
 ---
 
-## If something fails (agent + you)
+## If something fails
 
-| Message-ish problem | What happens next |
-|---------------------|-------------------|
+| Problem | Fix |
+|---------|-----|
+| `/mister-pack` missing | Start Grok from ExoDOSConverter root, or copy skill to `~/.grok/skills/` |
 | dosforge / converter missing | Agent runs `setup` |
-| Collection path wrong | Agent asks again; you paste the correct folder |
-| No games matched | Agent runs `resolve` and uses exact titles |
-| VHD size / FAT16 error | Agent rebuilds with `boot: auto` or FreeDOS |
-| Want SB instead of GUS | Agent runs `patch-autoexec --audio sb` |
-
-You should not need to edit YAML by hand unless you want to.
+| Collection path wrong | Agent asks again |
+| No games matched | Agent runs `resolve` with exact titles |
+| VHD / FAT16 size error | Agent uses `boot: auto` or FreeDOS |
+| Want SB instead of GUS | `patch-autoexec --audio sb` |

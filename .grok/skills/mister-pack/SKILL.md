@@ -15,10 +15,11 @@ description: >
 Production path: **recipe → convert → dosforge VHD**. Stay in Grok CLI. Do **not** open the ExoDOSConverter GUI or run test suites for normal packs.
 
 **CLI:** `python3 -m packcli …` or `python3 scripts/mister-pack …`  
-**Slash:** `/mister-pack`  
+**Slash:** `/mister-pack` (only after Grok can see this skill — not built into Grok)  
 **Skill path:** `.grok/skills/mister-pack/SKILL.md` (synced docs: `docs/MISTER_PACK_SKILL.md`)  
 **Fresh install (shell):** `docs/install_fresh.md`  
-**Fresh install (Grok CLI, minimal):** `docs/install_fresh_grok.md`
+**Fresh install (Grok CLI, minimal):** `docs/install_fresh_grok.md`  
+  — new users: clone this repo, start Grok from repo root, *then* `/mister-pack`
 
 ---
 

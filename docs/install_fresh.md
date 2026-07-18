@@ -4,6 +4,10 @@ Full path for someone with a clean Linux machine, terminal access, and no prior 
 
 **Related:** [install from Grok Build CLI](install_fresh_grok.md) · [mister-pack overview](MISTER_PACK.md) · [full skill guide](MISTER_PACK_SKILL.md)
 
+**Using Grok after this?** Clone (below) already ships the skill at
+`.grok/skills/mister-pack/`. Start Grok **from the repo root** so `/mister-pack`
+appears — it is not built into Grok itself. Details: [install_fresh_grok.md](install_fresh_grok.md).
+
 ---
 
 ## What this does / does not install
