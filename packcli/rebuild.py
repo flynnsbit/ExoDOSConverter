@@ -6,7 +6,7 @@ import os
 import sys
 from pathlib import Path
 
-from packcli.config import converter_root, default_dosassets, expand_path
+from packcli.config import converter_root, default_audio, default_dosassets, expand_path
 
 
 def run_rebuild(
@@ -15,6 +15,7 @@ def run_rebuild(
     boot: str = "auto",
     name: str = "",
     dosassets: str = "",
+    audio: str = "",
 ) -> int:
     root = str(converter_root())
     sys.path.insert(0, root)
@@ -44,6 +45,7 @@ def run_rebuild(
         elif p.name == "msdos622":
             assets_path = str(p)
 
+    audio_mode = (audio or default_audio() or "sb").strip().lower()
     conf = {
         "misterUseDosforge": "true",
         "misterLauncher": "mymenu",
@@ -53,6 +55,8 @@ def run_rebuild(
         "misterBuildName": build_name,
         "misterStagingDir": os.path.join(pack, ".edc-staging"),
         "misterDosforgeBootAssets": assets_path,
+        "misterAudio": audio_mode,
+        "misterPreferGus": "true" if audio_mode == "gus" else "false",
     }
 
     logger = Logger()

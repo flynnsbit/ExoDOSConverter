@@ -285,6 +285,39 @@ class DosforgeVhdBuilder:
                     self.logger.WARNING,
                 )
 
+    def _audioMode(self) -> str:
+        """sb | gus from conversionConf (misterAudio / misterPreferGus)."""
+        raw = str(self.conversionConf.get('misterAudio', '') or '').strip().lower()
+        if raw in ('gus', 'gravis', 'ultrasound', 'ultrasnd', 'sb', 'soundblaster', 'blaster'):
+            if raw in ('gus', 'gravis', 'ultrasound', 'ultrasnd'):
+                return 'gus'
+            return 'sb'
+        prefer = str(self.conversionConf.get('misterPreferGus', 'false')).strip().lower()
+        if prefer in ('1', 'true', 'yes', 'on'):
+            return 'gus'
+        return 'sb'
+
+    def _applyAudioModeToAutoexec(self, autoexecBytes: bytes) -> bytes:
+        """Rewrite AUTOEXEC audio block for SB or GUS (PMINIT /SB or /GUS)."""
+        mode = self._audioMode()
+        try:
+            # Prefer packcli helper when running from ExoDOSConverter tree.
+            sys_path_root = self.scriptDir
+            if sys_path_root not in __import__('sys').path:
+                __import__('sys').path.insert(0, sys_path_root)
+            from packcli.audio_autoexec import apply_audio_mode
+        except Exception as exc:
+            self.logger.log(
+                '  <WARNING> audio AUTOEXEC patch unavailable: %s' % exc,
+                self.logger.WARNING,
+            )
+            return autoexecBytes
+        text = autoexecBytes.decode('ascii', errors='replace')
+        new = apply_audio_mode(text, mode)
+        new = new.replace('\r\n', '\n').replace('\n', '\r\n')
+        self.logger.log('  AUTOEXEC audio mode: %s' % mode)
+        return new.encode('ascii', errors='replace')
+
     def _writeRootBootFiles(self, stagingRoot, mode):
         """Write Top300-style CONFIG.SYS + AUTOEXEC.BAT for MiSTer boot.
 
@@ -308,6 +341,7 @@ class DosforgeVhdBuilder:
             self.logger.log(
                 '  Installing Top300-style AUTOEXEC.BAT (C: only, MyMenu end)'
             )
+            autoexecBytes = self._applyAudioModeToAutoexec(autoexecBytes)
             with open(os.path.join(stagingRoot, 'AUTOEXEC.BAT'), 'wb') as fh:
                 fh.write(autoexecBytes)
             dosSrc = os.path.join(stagingRoot, 'DOS')
@@ -353,9 +387,14 @@ class DosforgeVhdBuilder:
                     '',
                     ':END',
                 ])
-                self._helper.__writeDosTextFile__(
-                    os.path.join(stagingRoot, 'AUTOEXEC.BAT'), lines
-                )
+                # Apply SB/GUS audio block after single-game rewrite.
+                path = os.path.join(stagingRoot, 'AUTOEXEC.BAT')
+                self._helper.__writeDosTextFile__(path, lines)
+                try:
+                    raw = open(path, 'rb').read()
+                    open(path, 'wb').write(self._applyAudioModeToAutoexec(raw))
+                except OSError:
+                    pass
             else:
                 self._helper.__writeDosTextFile__(
                     os.path.join(stagingRoot, 'AUTOEXEC.BAT'),
@@ -367,6 +406,12 @@ class DosforgeVhdBuilder:
                         'IF EXIST C:\\RUNMENU.BAT CALL C:\\RUNMENU.BAT',
                     ],
                 )
+                path = os.path.join(stagingRoot, 'AUTOEXEC.BAT')
+                try:
+                    raw = open(path, 'rb').read()
+                    open(path, 'wb').write(self._applyAudioModeToAutoexec(raw))
+                except OSError:
+                    pass
             return
 
         self.logger.log(

@@ -109,6 +109,7 @@ def build_from_recipe(recipe: PackRecipe) -> int:
         )
         conf["misterIncludeQemm"] = "true" if recipe.include_qemm else "false"
         conf["misterPreferGus"] = "true" if recipe.prefer_gus else "false"
+        conf["misterAudio"] = recipe.audio  # sb | gus → AUTOEXEC PMINIT line
         conf["preExtractGames"] = True
         conf["misterStagingDir"] = os.path.join(out_root, ".edc-staging")
         assets = state.getValue("misterDosforgeBootAssets")

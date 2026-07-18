@@ -6,7 +6,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, List, Optional
 
-from packcli.config import default_collection, default_dosassets, default_output, expand_path
+from packcli.config import (
+    default_audio,
+    default_collection,
+    default_dosassets,
+    default_output,
+    expand_path,
+)
 
 
 @dataclass
@@ -97,7 +103,7 @@ def load_recipe(path: str | Path) -> PackRecipe:
         output=str(data.get("output") or ""),
         dosassets=str(data.get("dosassets") or opts.get("dosassets") or ""),
         launcher=str(opts.get("launcher") or data.get("launcher") or "mymenu"),
-        audio=str(opts.get("audio") or data.get("audio") or "sb"),
+        audio=str(opts.get("audio") or data.get("audio") or default_audio() or "sb"),
         boot=str(opts.get("boot") or data.get("boot") or "auto"),
         prefer_gus=_as_bool(opts.get("prefer_gus") or data.get("prefer_gus")),
         include_qemm=_as_bool(opts.get("include_qemm"), True),

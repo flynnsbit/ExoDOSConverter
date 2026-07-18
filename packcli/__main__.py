@@ -39,16 +39,29 @@ def main(argv=None) -> int:
     )
     p_reb.add_argument("--name", default="", help="Build/VHD name override")
     p_reb.add_argument("--dosassets", default="", help="dosassets path override")
+    p_reb.add_argument(
+        "--audio",
+        choices=("sb", "gus"),
+        default=None,
+        help="AUTOEXEC audio: sb or gus (default: user config / sb)",
+    )
 
     p_patch = sub.add_parser(
         "patch-autoexec",
-        help="Patch AUTOEXEC on existing VHD (ULTRASND 5,5 + PMINIT /GUS 1)",
+        help="Patch AUTOEXEC on existing VHD (SB or GUS + matching PMINIT)",
     )
     p_patch.add_argument("vhd", help="Path to .vhd")
     p_patch.add_argument(
+        "--audio",
+        choices=("sb", "gus"),
+        default=None,
+        help="sb: BLASTER + PMINIT /SB 1; gus: ULTRASND + PMINIT /GUS 1 "
+        "(default: config/env or sb)",
+    )
+    p_patch.add_argument(
         "--no-gus",
         action="store_true",
-        help="Do not inject GUS/PicoMEM lines",
+        help="Deprecated: same as --audio sb",
     )
 
     args = parser.parse_args(argv)
@@ -73,11 +86,15 @@ def main(argv=None) -> int:
             boot=args.boot,
             name=args.name,
             dosassets=args.dosassets,
+            audio=args.audio or "",
         )
     if args.cmd == "patch-autoexec":
         from packcli.patch_autoexec import run_patch_autoexec
 
-        return run_patch_autoexec(args.vhd, gus=not args.no_gus)
+        audio = args.audio
+        if audio is None and args.no_gus:
+            audio = "sb"
+        return run_patch_autoexec(args.vhd, audio=audio)
     parser.print_help()
     return 2
 

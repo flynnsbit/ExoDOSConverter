@@ -4,3 +4,11 @@
 collection = "/mnt/net/exodos/eXoDOS"
 dosassets = "/home/shawn/Projects/dosforge/dosassets"
 output = "/home/shawn/Projects/ExoDOSConverter/out/mister-packs"
+
+# AUTOEXEC audio mode: "sb" or "gus"
+#   sb  → SET BLASTER=A220 I7 D1 H5 P330 T6
+#         IF EXIST C:\PICOMEM\PMINIT.EXE C:\PICOMEM\PMINIT.EXE /SB 1
+#   gus → SET ULTRASND=240,1,1,5,5  + ULTRADIR=C:\ULTRASND
+#         IF EXIST C:\PICOMEM\PMINIT.EXE C:\PICOMEM\PMINIT.EXE /GUS 1
+# Recipe options.audio overrides this when building.
+audio = "sb"

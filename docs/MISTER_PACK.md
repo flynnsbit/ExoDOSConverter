@@ -33,9 +33,22 @@ Also: `python3 scripts/mister-pack …`
 collection = "/mnt/net/exodos/eXoDOS"
 dosassets = "/home/you/Projects/dosforge/dosassets"
 output = "/home/you/mister-out"
+# AUTOEXEC sound: "sb" or "gus"
+audio = "sb"
 ```
 
-Env vars still win: `EXODOS_COLLECTION`, `DOSFORGE_DOSASSETS_DIR`, `MISTER_PACK_OUT`.
+| `audio` | AUTOEXEC sets | Then runs |
+|---------|----------------|-----------|
+| `sb` | `BLASTER=A220 I7 D1 H5 P330 T6` | `C:\PICOMEM\PMINIT.EXE /SB 1` |
+| `gus` | `ULTRASND=240,1,1,5,5` + `ULTRADIR=C:\ULTRASND` (and BLASTER kept) | `C:\PICOMEM\PMINIT.EXE /GUS 1` |
+
+Env vars still win: `EXODOS_COLLECTION`, `DOSFORGE_DOSASSETS_DIR`, `MISTER_PACK_OUT`, `MISTER_PACK_AUDIO`.
+
+```bash
+python3 -m packcli patch-autoexec pack.vhd --audio sb
+python3 -m packcli patch-autoexec pack.vhd --audio gus
+python3 -m packcli rebuild-vhd ./pack --audio gus
+```
 
 ## Grok
 

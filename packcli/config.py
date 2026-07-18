@@ -79,6 +79,21 @@ def default_dosassets() -> str:
     return next((c for c in candidates if c), "")
 
 
+def default_audio() -> str:
+    """Default AUTOEXEC audio mode: ``sb`` or ``gus``.
+
+    Order: env ``MISTER_PACK_AUDIO`` → config.toml ``audio`` → ``sb``.
+    """
+    raw = env_path(
+        "MISTER_PACK_AUDIO",
+        env_path("EDC_AUDIO", _cfg_str("audio", "sb")),
+    )
+    v = raw.strip().lower()
+    if v in ("gus", "gravis", "ultrasound", "ultrasnd"):
+        return "gus"
+    return "sb"
+
+
 def expand_path(value: str) -> str:
     if not value:
         return ""

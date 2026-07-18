@@ -39,12 +39,19 @@ python3 -m packcli build -f recipes/gus-classics.yaml
 # Rebuild VHD only (pack already has games/ + mymenu/)
 python3 -m packcli rebuild-vhd out/mister-gus-pack/GUS_Classics --boot auto
 
-# Patch AUTOEXEC on existing VHD (ULTRASND 240,1,1,5,5 + PMINIT /GUS 1)
-python3 -m packcli patch-autoexec path/to/pack.vhd
+# Patch AUTOEXEC on existing VHD (SB or GUS)
+python3 -m packcli patch-autoexec path/to/pack.vhd --audio sb
+python3 -m packcli patch-autoexec path/to/pack.vhd --audio gus
 ```
 
-Optional config: `~/.config/mister-pack/config.toml` with `collection`, `dosassets`, `output`.
+Optional config: `~/.config/mister-pack/config.toml` with `collection`, `dosassets`, `output`, **`audio = "sb"` or `"gus"`**.
 
+| audio | Variables | PMINIT |
+|-------|-----------|--------|
+| `sb` | `BLASTER=A220 I7 D1 H5 P330 T6` | `/SB 1` |
+| `gus` | `ULTRASND=240,1,1,5,5` + `ULTRADIR` (+ BLASTER kept) | `/GUS 1` |
+
+Recipe `options.audio` overrides user config for a build.
 ## Workflow for a user prompt
 
 1. **`doctor`** — if collection/dosforge/dosassets fail, fix env (do not invent paths).
