@@ -38,7 +38,12 @@ python3 -m packcli build -f recipes/gus-classics.yaml
 
 # Rebuild VHD only (pack already has games/ + mymenu/)
 python3 -m packcli rebuild-vhd out/mister-gus-pack/GUS_Classics --boot auto
+
+# Patch AUTOEXEC on existing VHD (ULTRASND 240,1,1,5,5 + PMINIT /GUS 1)
+python3 -m packcli patch-autoexec path/to/pack.vhd
 ```
+
+Optional config: `~/.config/mister-pack/config.toml` with `collection`, `dosassets`, `output`.
 
 ## Workflow for a user prompt
 

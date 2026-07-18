@@ -40,6 +40,17 @@ def main(argv=None) -> int:
     p_reb.add_argument("--name", default="", help="Build/VHD name override")
     p_reb.add_argument("--dosassets", default="", help="dosassets path override")
 
+    p_patch = sub.add_parser(
+        "patch-autoexec",
+        help="Patch AUTOEXEC on existing VHD (ULTRASND 5,5 + PMINIT /GUS 1)",
+    )
+    p_patch.add_argument("vhd", help="Path to .vhd")
+    p_patch.add_argument(
+        "--no-gus",
+        action="store_true",
+        help="Do not inject GUS/PicoMEM lines",
+    )
+
     args = parser.parse_args(argv)
 
     if args.cmd == "doctor":
@@ -63,6 +74,10 @@ def main(argv=None) -> int:
             name=args.name,
             dosassets=args.dosassets,
         )
+    if args.cmd == "patch-autoexec":
+        from packcli.patch_autoexec import run_patch_autoexec
+
+        return run_patch_autoexec(args.vhd, gus=not args.no_gus)
     parser.print_help()
     return 2
 

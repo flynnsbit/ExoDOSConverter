@@ -1,0 +1,6 @@
+# Copy to ~/.config/mister-pack/config.toml and edit paths.
+# Environment variables always override these values.
+
+collection = "/mnt/net/exodos/eXoDOS"
+dosassets = "/home/shawn/Projects/dosforge/dosassets"
+output = "/home/shawn/Projects/ExoDOSConverter/out/mister-packs"

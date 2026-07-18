@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+import re
 import sys
-from pathlib import Path
 from typing import List, Tuple
 
 from packcli.config import converter_root, default_collection, expand_path
@@ -23,33 +23,52 @@ def _load_csv_titles() -> List[str]:
     return titles
 
 
+def _base_name(title: str) -> str:
+    """Title without trailing (year) / edition noise for matching."""
+    return re.sub(r"\s*\([^)]*\)\s*$", "", title).strip().lower()
+
+
 def resolve_query(query: str, limit: int = 15) -> List[Tuple[str, str]]:
-    """Return list of (title, match_kind)."""
+    """Return list of (title, match_kind) best-first."""
     q = query.strip().lower()
     if not q:
         return []
     titles = _load_csv_titles()
-    exact = []
-    starts = []
-    contains = []
+    scored: List[Tuple[int, str, str]] = []
+    # lower score = better
     for t in titles:
         tl = t.lower()
-        if tl == q:
-            exact.append((t, "exact"))
-        elif tl.startswith(q) or q in tl.split("(")[0].strip().lower():
-            starts.append((t, "prefix"))
+        base = _base_name(t)
+        if tl == q or base == q:
+            scored.append((0, t, "exact"))
+        elif base == q or re.fullmatch(re.escape(q), base):
+            scored.append((0, t, "exact"))
+        elif base.startswith(q + " ") or base.startswith(q + ":"):
+            scored.append((1, t, "prefix"))
+        elif re.search(r"\b" + re.escape(q) + r"\b", base):
+            # whole-word in base name (prefer over random contains)
+            # "doom" in "DOOM" base ranks high; "doom" in "Dr. Doom's…" still matches
+            if base == q or base.startswith(q):
+                scored.append((1, t, "prefix"))
+            elif base.split()[0] == q:
+                scored.append((2, t, "word"))
+            else:
+                scored.append((4, t, "word"))
+        elif tl.startswith(q):
+            scored.append((3, t, "prefix"))
         elif q in tl:
-            contains.append((t, "contains"))
-    out = exact + starts + contains
-    # dedupe preserve order
+            scored.append((5, t, "contains"))
+    scored.sort(key=lambda x: (x[0], x[1].lower()))
     seen = set()
-    uniq = []
-    for t, k in out:
+    uniq: List[Tuple[str, str]] = []
+    for _s, t, k in scored:
         if t in seen:
             continue
         seen.add(t)
         uniq.append((t, k))
-    return uniq[:limit]
+        if len(uniq) >= limit:
+            break
+    return uniq
 
 
 def run_resolve(queries: List[str], limit: int = 15) -> int:
@@ -65,6 +84,9 @@ def run_resolve(queries: List[str], limit: int = 15) -> int:
         if not hits:
             print("  (no matches)")
             continue
-        for title, kind in hits:
-            print(f"  [{kind:8}] {title}")
+        for i, (title, kind) in enumerate(hits):
+            mark = " *" if i == 0 else "  "
+            print(f"{mark}[{kind:8}] {title}")
+        if hits:
+            print(f"  best: {hits[0][0]}")
     return 0
