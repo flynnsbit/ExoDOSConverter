@@ -1,5 +1,7 @@
 # mister-pack (production pack CLI + Grok skill)
 
+**Full feature & usage guide (skill instructions):** [MISTER_PACK_SKILL.md](MISTER_PACK_SKILL.md) and `.grok/skills/mister-pack/SKILL.md` (`/mister-pack`).
+
 Minimal path from a game list to a MiSTer ao486 pack **without** the converter GUI.
 
 ## Setup (once)
