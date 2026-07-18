@@ -80,20 +80,15 @@ def _derive_chd_path(orig_path):
     return dirname + stem + '.chd'
 
 
-def apply_r1(line):
-    """R1: imgset device "<path>" -> CALL imgtry device <letter> "<chd>" "<original>".
+def apply_r1(line, target='mister'):
+    """R1: imgset → hardware-specific CD/media mount.
 
-    Drops dummy "/cd/<game>/d" (or similar bare-dir) unmount lines.
-    Returns either:
-      - str: rewritten line (no trailing newline)
-      - None: indicates the line should be DROPPED entirely
-      - original line unchanged if not an imgset line
+    * **mister** (default): ``CALL imgtry …`` with CHD fallback (Top300).
+    * **picogus / picoide**: REM lines + ``CALL …\\PGUSCD.BAT list`` (USB root images).
+    * **picomem**: REM stub (BIOS disk / future CD).
 
-    Per plan.md R1: source-priority chain .chd > .cue > .iso > .img.
-    The CHD path is derived via _derive_chd_path() which mirrors Top300's
-    multi-dot-stripping convention. The fallback is the original path verbatim.
-
-    Verified against Top300 ground-truth samples in baseline/ground-truth/top300_updates/.
+    Returns str, list[str], None (drop), or original line.
+    Drops dummy "/cd/<game>/d" bare-dir unmount lines for all targets.
     """
     m = IMGSET_RE.match(line)
     if not m:
@@ -107,17 +102,33 @@ def apply_r1(line):
 
     _, ext = os.path.splitext(path)
 
-    # Dummy "/cd/<game>/d" or similar directory-unmount lines: the path basename
-    # has no recognized media extension. These were used to flush the CD slot
-    # before mounting; imgtry handles flush atomically so they're redundant.
+    # Dummy "/cd/<game>/d" or similar directory-unmount lines
     media_exts = {'.cue', '.iso', '.img', '.ima', '.bin', '.chd', '.vhd'}
     if ext.lower() not in media_exts:
         return None
 
+    target = (target or 'mister').strip().lower()
+    basename = path.replace('\\', '/').rsplit('/', 1)[-1]
+
+    if target in ('picogus', 'picoide'):
+        # User copies pack cd/ files to USB root; index via pgusinit /cdlist
+        return [
+            'REM native %s: copy %s to FAT32 USB root' % (target, basename),
+            'REM then: CALL C:\\DRIVERS\\HW\\PGUSCD.BAT load n',
+            'CALL C:\\DRIVERS\\HW\\PGUSCD.BAT list',
+        ]
+
+    if target == 'picomem':
+        return [
+            'REM picomem: media "%s"' % path,
+            'REM attach VHD/IMG via PicoMEM BIOS; CD: CALL C:\\DRIVERS\\HW\\PMCD.BAT help',
+            'CALL C:\\DRIVERS\\HW\\PMCD.BAT help',
+        ]
+
+    # mister (default)
     drive = DEVICE_DRIVE_LETTER[device]
     chd_path = _derive_chd_path(path)
 
-    # If original is already .chd, no fallback needed -- just a single-path imgtry call
     if ext.lower() == '.chd':
         return 'CALL imgtry {device} {drive} "{path}"'.format(
             device=device, drive=drive, path=path)
@@ -145,49 +156,61 @@ def apply_r2(line):
 
 
 # Ordered pipeline of (rule_name, rule_function) pairs.
-# Each rule takes a single line and returns: str (rewritten), None (drop), or
-# the original line unchanged.
+# R1 is special-cased with target=; R2 is target-agnostic.
 RULES = [
     ('R1', apply_r1),
     ('R2', apply_r2),
 ]
 
 
-def apply_rules_to_line(line):
-    """Run the rule pipeline on one line. Returns rewritten line or None."""
+def apply_rules_to_line(line, target='mister'):
+    """Run the rule pipeline on one line.
+
+    Returns str, list[str], or None (drop).
+    """
     current = line
-    for _, rule in RULES:
+    for name, rule in RULES:
         if current is None:
             return None
-        current = rule(current)
+        if isinstance(current, list):
+            # Already expanded by a prior rule — apply R2 per line only
+            if name == 'R2':
+                current = [rule(x) if isinstance(x, str) else x for x in current]
+            continue
+        if name == 'R1':
+            current = rule(current, target=target)
+        else:
+            current = rule(current)
     return current
 
 
-def apply_rules_to_lines(lines):
+def apply_rules_to_lines(lines, target='mister'):
     """Run the rule pipeline across a list of input lines.
 
     Returns list of output lines, with dropped lines (None results) filtered.
-    Input lines may or may not have trailing newlines; output strings are
-    bare (no newlines) so the caller chooses the line ending.
+    Rules may expand one line into several (list return).
     """
     out = []
     for line in lines:
-        # Strip trailing newline / whitespace for rule processing
         bare = line.rstrip('\r\n').rstrip()
-        result = apply_rules_to_line(bare)
+        result = apply_rules_to_line(bare, target=target)
         if result is None:
             continue
-        out.append(result)
+        if isinstance(result, list):
+            for item in result:
+                if item is None:
+                    continue
+                out.append(item)
+        else:
+            out.append(result)
     return out
 
 
-def apply_rules_to_file(filepath, encoding='latin-1'):
+def apply_rules_to_file(filepath, encoding='latin-1', target='mister'):
     """Read filepath, apply rules to every line, write back with CRLF.
 
     Encoding defaults to latin-1 (round-trips any byte sequence losslessly).
-    The converter writes generated bats without explicit encoding (Python's
-    platform default), so latin-1 read + latin-1 write is the safest pairing
-    that won't corrupt non-ASCII bytes.
+    ``target`` selects media rewrite style (mister|picomem|picogus|picoide).
 
     Returns (lines_read, lines_written, dropped_count) tuple for logging.
     """
@@ -197,8 +220,9 @@ def apply_rules_to_file(filepath, encoding='latin-1'):
     with open(filepath, 'r', encoding=encoding) as f:
         input_lines = f.readlines()
 
-    output_lines = apply_rules_to_lines(input_lines)
-    dropped = len(input_lines) - len(output_lines)
+    output_lines = apply_rules_to_lines(input_lines, target=target)
+    # Dropped is approximate when rules expand lines
+    dropped = max(0, len(input_lines) - len(output_lines))
 
     with open(filepath, 'w', encoding=encoding, newline='\r\n') as f:
         for line in output_lines:

@@ -129,6 +129,7 @@ def extractBootC(stagingRoot, scriptDir, logger, includeQemm=True):
         )
 
     # Gravis UltraSound tree (ULTRADIR=C:\ULTRASND) + PicoMEM drivers (C:\PICOMEM)
+    # Always stage for pack portability (MiSTer ↔ native PC).
     _stageNamedTree(
         stagingRoot,
         scriptDir,
@@ -144,15 +145,31 @@ def extractBootC(stagingRoot, scriptDir, logger, includeQemm=True):
         destName='PICOMEM',
     )
 
+    # Native-PC helpers: PicoGUS tools + HW CD mount BATs under C:\DRIVERS\
+    _stageIntoDrivers(
+        stagingRoot,
+        scriptDir,
+        logger,
+        dataRel=('data', 'native', 'picogus'),
+        destSub='PICOGUS',
+    )
+    _stageIntoDrivers(
+        stagingRoot,
+        scriptDir,
+        logger,
+        dataRel=('data', 'native', 'hw'),
+        destSub='HW',
+    )
+
     logger.log(
-        '  boot-c staged: DRIVERS%s + DOS supplements + TMP'
+        '  boot-c staged: DRIVERS%s + DOS supplements + TMP + native HW tools'
         % (' + QEMM' if includeQemm else '')
     )
     return True
 
 
 def _stageNamedTree(stagingRoot, scriptDir, logger, dataRel, destName):
-    """Copy data/mister/<name>/ into staging as C:\\<DESTNAME>\\."""
+    """Copy data/... tree into staging as C:\\<DESTNAME>\\."""
     src = os.path.join(scriptDir, *dataRel)
     if not os.path.isdir(src):
         logger.log(
@@ -164,15 +181,48 @@ def _stageNamedTree(stagingRoot, scriptDir, logger, dataRel, destName):
     if os.path.isdir(dest):
         shutil.rmtree(dest)
     shutil.copytree(src, dest)
-    # Drop non-DOS junk if present
-    for junk in ('.gitignore', 'README.md', '.git'):
+    _stripStagingJunk(dest)
+    logger.log('  staged C:\\%s from %s' % (destName, src))
+    return True
+
+
+def _stageIntoDrivers(stagingRoot, scriptDir, logger, dataRel, destSub):
+    """Copy data/native/... into C:\\DRIVERS\\<destSub>\\."""
+    src = os.path.join(scriptDir, *dataRel)
+    if not os.path.isdir(src):
+        logger.log(
+            '  <WARNING> Missing DRIVERS\\%s payload at %s' % (destSub, src),
+            logger.WARNING,
+        )
+        return False
+    driversDir = os.path.join(stagingRoot, 'DRIVERS')
+    os.makedirs(driversDir, exist_ok=True)
+    dest = os.path.join(driversDir, destSub)
+    if os.path.isdir(dest):
+        shutil.rmtree(dest)
+    shutil.copytree(src, dest)
+    _stripStagingJunk(dest)
+    # Keep README.HW and DOS .TXT docs for users; drop markdown only.
+    logger.log('  staged C:\\DRIVERS\\%s from %s' % (destSub, src))
+    return True
+
+
+def _stripStagingJunk(dest):
+    """Remove VCS / markdown junk; keep .TXT / .HW help files for DOS users."""
+    for junk in ('.gitignore', '.git'):
         p = os.path.join(dest, junk)
         if os.path.isfile(p):
             os.remove(p)
         elif os.path.isdir(p):
             shutil.rmtree(p)
-    logger.log('  staged C:\\%s from %s' % (destName, src))
-    return True
+    # Drop *.md (GitHub README) — not usable on pure DOS easily
+    for root, _dirs, files in os.walk(dest):
+        for name in files:
+            if name.lower().endswith('.md'):
+                try:
+                    os.remove(os.path.join(root, name))
+                except OSError:
+                    pass
 
 
 def bootCTemplateBytes(scriptDir, name):

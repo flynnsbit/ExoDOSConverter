@@ -56,6 +56,7 @@ def build_from_recipe(recipe: PackRecipe) -> int:
     )
     state.setValue("misterIncludeQemm", "true" if recipe.include_qemm else "false")
     state.setValue("misterPreferGus", "true" if recipe.prefer_gus else "false")
+    state.setValue("misterTarget", recipe.target)
     state.setValue("preExtractGames", "1")
     if recipe.dosassets:
         state.setValue("misterDosforgeBootAssets", recipe.dosassets)
@@ -65,6 +66,7 @@ def build_from_recipe(recipe: PackRecipe) -> int:
     print("  collection:", recipe.collection, flush=True)
     print("  output:    ", out_root, flush=True)
     print("  games:     ", len(recipe.games), flush=True)
+    print("  target:    ", recipe.target, flush=True)
     print("  audio:     ", recipe.audio, "prefer_gus=", recipe.prefer_gus, flush=True)
     print("  boot:      ", recipe.boot, flush=True)
     print(
@@ -109,7 +111,8 @@ def build_from_recipe(recipe: PackRecipe) -> int:
         )
         conf["misterIncludeQemm"] = "true" if recipe.include_qemm else "false"
         conf["misterPreferGus"] = "true" if recipe.prefer_gus else "false"
-        conf["misterAudio"] = recipe.audio  # sb | gus → AUTOEXEC PMINIT line
+        conf["misterAudio"] = recipe.audio  # sb | gus → AUTOEXEC audio block
+        conf["misterTarget"] = recipe.target  # mister|picomem|picogus|picoide
         conf["preExtractGames"] = True
         conf["misterStagingDir"] = os.path.join(out_root, ".edc-staging")
         assets = state.getValue("misterDosforgeBootAssets")

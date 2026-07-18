@@ -1,0 +1,17 @@
+# Minimal native PicoGUS-oriented pack (still stages MiSTer + PicoMEM tools).
+name: PicoGUS Demo
+collection: ${EXODOS_COLLECTION}
+output: ./out/native-packs
+
+games:
+  - DOOM (1993)
+
+options:
+  target: picogus          # mister | picomem | picogus | picoide
+  audio: gus               # sb | gus (common)
+  boot: auto
+  launcher: mymenu
+  prefer_gus: true
+  include_qemm: true
+  long_game_folder: true
+  generate_readme_ans: true

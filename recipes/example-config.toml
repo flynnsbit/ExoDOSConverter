@@ -24,3 +24,11 @@ output = "/home/shawn/Projects/ExoDOSConverter/out/mister-packs"
 #         IF EXIST C:\PICOMEM\PMINIT.EXE C:\PICOMEM\PMINIT.EXE /GUS 1
 # Recipe options.audio overrides this when building.
 audio = "sb"
+
+# Hardware pack target (recipe options.target overrides):
+#   mister  → MiSTer ao486 + imgtry CD
+#   picomem → PicoMEM BIOS disk + PMINIT (CD stub)
+#   picogus → PicoGUS CDMKE + PGUSCD / pgusinit CD
+#   picoide → future (same helpers as picogus)
+# All driver trees are still staged on every VHD for portability.
+# target = "mister"

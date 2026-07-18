@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 from packcli.audio_autoexec import apply_audio_mode, normalize_audio_mode
-from packcli.config import default_audio
+from packcli.config import default_audio, default_target, normalize_target
 
 
 def _df(*args: str) -> subprocess.CompletedProcess:
@@ -24,10 +24,12 @@ def run_patch_autoexec(
     *,
     audio: str | None = None,
     gus: bool | None = None,
+    target: str | None = None,
 ) -> int:
-    """Patch VHD AUTOEXEC for audio mode.
+    """Patch VHD AUTOEXEC for audio mode and hardware target.
 
     ``audio`` is ``sb`` or ``gus``. Legacy ``gus=True/False`` still accepted.
+    ``target`` is mister|picomem|picogus|picoide.
     """
     if audio is None and gus is not None:
         mode = "gus" if gus else "sb"
@@ -35,6 +37,7 @@ def run_patch_autoexec(
         mode = default_audio()
     else:
         mode = normalize_audio_mode(audio, default=default_audio())
+    pack_target = normalize_target(target or default_target())
 
     vhd = Path(vhd_path)
     if not vhd.is_file():
@@ -55,7 +58,7 @@ def run_patch_autoexec(
             text = local.read_text(encoding="ascii")
         except UnicodeDecodeError:
             text = local.read_text(encoding="latin-1")
-        new = apply_audio_mode(text, mode)
+        new = apply_audio_mode(text, mode, target=pack_target)
         new = new.replace("\r\n", "\n").replace("\n", "\r\n")
         local.write_bytes(new.encode("ascii", errors="replace"))
         r = _df("put", str(vhd), str(local), "::/AUTOEXEC.BAT")
@@ -67,12 +70,21 @@ def run_patch_autoexec(
             )
             return 1
 
-    print("Patched", vhd, f"::/AUTOEXEC.BAT (audio={mode})")
+    print("Patched", vhd, f"::/AUTOEXEC.BAT (audio={mode} target={pack_target})")
     r = _df("cat", str(vhd), "::/AUTOEXEC.BAT")
     for line in (r.stdout or "").splitlines():
         if any(
             x in line.upper()
-            for x in ("ULTRA", "PMINIT", "BLASTER", "SBCTL", "mister-pack audio")
+            for x in (
+                "ULTRA",
+                "PMINIT",
+                "BLASTER",
+                "SBCTL",
+                "mister-pack",
+                "PGUS",
+                "CDMKE",
+                "MSCDEX",
+            )
         ):
             print(" ", line)
     return 0

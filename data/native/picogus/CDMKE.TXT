@@ -1,0 +1,83 @@
+
+        *****************************************************
+        *             Propraietary CD-ROM drive             *
+        *****************************************************
+
+        /////////////////////////////////////////////////////
+        ///                                               ///
+        ///  Documentation for Installer(DOS)  and        ///
+        ///  Documentation for DeviceDriver(DOS, Win3.1)  ///
+        ///                                               ///
+        ///             Making   date:   6/10/96          ///
+        ///                                               ///
+        ///  Copyright (C) 1995-1996                      ///
+        ///  Matsushita-Kotobuki Electronics              ///
+        ///       Industries Ltd.  All rights reserved.   ///
+        ///  Documentation by Device Driver Project(DDP)  ///
+        ///                                               ///
+        /////////////////////////////////////////////////////
+
+
+*******************************************************************************
+(A)	PC DOS and MS-DOS installation Procedure
+        (also supported for Windows 3.1 / Windows For Workgroup 3.11)
+*******************************************************************************
+
+1. Supportted CD-ROM drive:
+        <Propraietary Interface CD-ROM>
+	CR-562/563     (2x speed, tray loading type CD-ROM)
+
+2. Installer file name:
+	INSTALL.EXE (Version 1.00, common file for installation)
+	INSTALL.DAT (installation's data file for propraietary CD-ROM)
+
+3. Discription for execution:
+	If you will set up CR-56X(proprietary CD-ROM), please type following:
+		'INSTALL' [return]
+
+
+*******************************************************************************
+(B)	PC DOS and MS-DOS device driver support
+	(also supported for Windows 3.1, Windows for Workgroup 3.11)
+*******************************************************************************
+
+1. Supportted CD-ROM drive:
+        <Propraietary Interface CD-ROM>
+	CR-562/563     (2x speed, tray loading type CD-ROM)
+	CR-521/522/523 (1x speed, caddy loading type CD-ROM)
+
+2. Driver name:
+	CDMKE.SYS (Version 4.11)
+
+3. Driver discription:
+	[/D:xxxxxxx]	---> Device name option
+		ex.)DEVICE=CDMKE.SYS /D:MSCD001
+
+	[/SBP:nnn]	---> I/F board address option(Sound Blaster)
+	*[/P:nnn]	---> I/F board address option(Other)
+		if Sound Blaster board
+		ex.)DEVICE=CDMKE.SYS /D:MSCD000 /SBP:nnn
+		nnn==220, 240, 260 or 280(Default is 220)
+		Sound Blaster Pro(8bit) 220 or 240
+		Sound Blaster 16(16bit) 220, 240, 260 or 280
+		if MKE original or other board
+		ex.)DEVICE=CDMKE.SYS /D:MSCD000 /P:nnn
+		nnn==I/O base port address of interface board
+
+	*[/Q]		---> Non stop option
+		Non stop(no message <A>bort, <R>etry) in initializing driver.
+		ex.)DEVICE=CDMKE.SYS /D:MSCD000 /Q
+
+	* : You can omit this option.
+
+
+Trademarks and Copyrights:
+        PC DOS and OS/2 is a registered trademark
+			of International Business Machines Corporation.
+        MS-DOS, MS Windows and CD-ROM Extensions are trademarks
+			or registered trademarks of Microsoft corporation.
+	Sound Blaster and Video Blaster is a registered trademark
+			of Creative Labs, Inc.
+	All other product/brand names are trademarks or registered trademarks
+			of their respective companies.
+

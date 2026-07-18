@@ -6,7 +6,14 @@ import os
 import sys
 from pathlib import Path
 
-from packcli.config import converter_root, default_audio, default_dosassets, expand_path
+from packcli.config import (
+    converter_root,
+    default_audio,
+    default_dosassets,
+    default_target,
+    expand_path,
+    normalize_target,
+)
 
 
 def run_rebuild(
@@ -16,6 +23,7 @@ def run_rebuild(
     name: str = "",
     dosassets: str = "",
     audio: str = "",
+    target: str = "",
 ) -> int:
     root = str(converter_root())
     sys.path.insert(0, root)
@@ -46,6 +54,7 @@ def run_rebuild(
             assets_path = str(p)
 
     audio_mode = (audio or default_audio() or "sb").strip().lower()
+    pack_target = normalize_target(target or default_target())
     conf = {
         "misterUseDosforge": "true",
         "misterLauncher": "mymenu",
@@ -57,6 +66,7 @@ def run_rebuild(
         "misterDosforgeBootAssets": assets_path,
         "misterAudio": audio_mode,
         "misterPreferGus": "true" if audio_mode == "gus" else "false",
+        "misterTarget": pack_target,
     }
 
     logger = Logger()

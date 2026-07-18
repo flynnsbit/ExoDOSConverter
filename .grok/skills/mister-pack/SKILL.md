@@ -19,7 +19,9 @@ Production path: **recipe → convert → dosforge VHD**. Stay in Grok CLI. Do *
 **Skill path:** `.grok/skills/mister-pack/SKILL.md` (synced docs: `docs/MISTER_PACK_SKILL.md`)  
 **Fresh install (shell):** `docs/install_fresh.md`  
 **Fresh install (Grok CLI, minimal):** `docs/install_fresh_grok.md`  
-  — new users: clone this repo, start Grok from repo root, *then* `/mister-pack`
+  — new users: clone this repo, start Grok from repo root, *then* `/mister-pack`  
+**Native PC targets:** `docs/NATIVE_PC_PACK.md` — `options.target`: mister \| picomem \| picogus \| picoide  
+  (all drivers staged every pack; CD helpers under `C:\DRIVERS\HW\`)
 
 ---
 
@@ -244,16 +246,19 @@ games:
 
 options:
   launcher: mymenu          # mymenu | none (single-game direct launch)
-  audio: gus                # sb | gus  (see §5)
+  target: mister            # mister | picomem | picogus | picoide
+  audio: gus                # sb | gus  (see §5; common to all targets)
   boot: auto                # auto | msdos622 | freedos
   prefer_gus: true          # implied when audio: gus
   pminit_gus: true          # implied when audio: gus
   include_qemm: true
-  include_ultrasnd: true    # stage C:\ULTRASND
-  include_picomem: true     # stage C:\PICOMEM
+  include_ultrasnd: true    # always staged for portability
+  include_picomem: true     # always staged for portability
   long_game_folder: true
   generate_readme_ans: true
 ```
+
+Hardware targets (see `docs/NATIVE_PC_PACK.md`): **mister** = imgtry CD; **picogus** = CDMKE + PGUSCD/USB; **picomem** = BIOS VHD + PMINIT; **picoide** = stub like picogus. Every pack ships `C:\DRIVERS\PICOGUS\`, `C:\DRIVERS\HW\`, `C:\PICOMEM\`, `C:\ULTRASND\`.
 
 Shipped example: `recipes/gus-classics.yaml` (11 GUS classics).
 

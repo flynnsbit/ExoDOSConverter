@@ -11,7 +11,9 @@ from packcli.config import (
     default_collection,
     default_dosassets,
     default_output,
+    default_target,
     expand_path,
+    normalize_target,
 )
 
 
@@ -24,6 +26,7 @@ class PackRecipe:
     dosassets: str = ""
     launcher: str = "mymenu"
     audio: str = "sb"  # sb | gus
+    target: str = "mister"  # mister | picomem | picogus | picoide
     boot: str = "auto"  # auto | msdos622 | freedos
     prefer_gus: bool = False
     include_qemm: bool = True
@@ -42,6 +45,7 @@ class PackRecipe:
             dosassets=expand_path(self.dosassets or default_dosassets()),
             launcher=self.launcher or "mymenu",
             audio=(self.audio or "sb").lower(),
+            target=normalize_target(self.target or default_target()),
             boot=(self.boot or "auto").lower(),
             prefer_gus=bool(self.prefer_gus),
             include_qemm=bool(self.include_qemm),
@@ -51,11 +55,12 @@ class PackRecipe:
             long_game_folder=bool(self.long_game_folder),
             generate_readme_ans=bool(self.generate_readme_ans),
         )
+        # Always stage both trees for portability across hardware.
+        r.include_ultrasnd = True
+        r.include_picomem = True
         if r.audio == "gus":
             r.prefer_gus = True
             r.pminit_gus = True
-            r.include_ultrasnd = True
-            r.include_picomem = True
         return r
 
 
@@ -104,6 +109,9 @@ def load_recipe(path: str | Path) -> PackRecipe:
         dosassets=str(data.get("dosassets") or opts.get("dosassets") or ""),
         launcher=str(opts.get("launcher") or data.get("launcher") or "mymenu"),
         audio=str(opts.get("audio") or data.get("audio") or default_audio() or "sb"),
+        target=str(
+            opts.get("target") or data.get("target") or default_target() or "mister"
+        ),
         boot=str(opts.get("boot") or data.get("boot") or "auto"),
         prefer_gus=_as_bool(opts.get("prefer_gus") or data.get("prefer_gus")),
         include_qemm=_as_bool(opts.get("include_qemm"), True),

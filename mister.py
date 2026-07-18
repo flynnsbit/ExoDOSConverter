@@ -134,17 +134,20 @@ def batsAndMounts(gGator):
     # cds into it (MyMenu CWD is the LFN folder, not the dosname subfolder).
     ensure_cwd_is_game_payload(gGator)
 
-    # Phase D5 rules engine: rewrite imgset -> CALL imgtry with CHD-fallback chain (R1),
+    # Phase D5 rules engine: rewrite imgset for pack target (R1),
     # pause -> @jchoice (R2), drop dummy directory-unmount lines.
-    # Applied to all generated/cloned bats; R1 only fires on imgset lines so eXoDOS
-    # source bats without imgset (most of them) pass through untouched.
+    # target: mister (imgtry) | picogus/picoide (PGUSCD) | picomem (PMCD stub)
+    conf = getattr(gGator, 'conversionConf', None) or {}
+    pack_target = str(conf.get('misterTarget', 'mister') or 'mister').strip().lower()
     for bat_name in ('1_Start.bat', '3_Setup.bat', 'run.bat'):
         bat_path = os.path.join(gGator.getLocalGameOutputDir(), bat_name)
         if not os.path.isfile(bat_path):
             # run.bat for many games is in the data subdir, not the game output root
             bat_path = os.path.join(gGator.getLocalGameDataOutputDir(), bat_name)
         if os.path.isfile(bat_path):
-            n_in, n_out, n_dropped = misterbatrules.apply_rules_to_file(bat_path)
+            n_in, n_out, n_dropped = misterbatrules.apply_rules_to_file(
+                bat_path, target=pack_target
+            )
             if n_dropped > 0:
                 gGator.logger.log(
                     "      rules: dropped %i dummy imgset lines from %s"

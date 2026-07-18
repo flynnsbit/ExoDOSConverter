@@ -1,0 +1,26 @@
+# Hardware CD / media helpers (C:\DRIVERS\HW\)
+
+Every pack ships **all** helpers so you can move a VHD between systems.
+
+| Target | CD / media command | Audio init |
+|--------|-------------------|------------|
+| **mister** | `CALL imgtry …` or `CALL C:\DRIVERS\HW\IMGTRY.BAT …` | `PMINIT /SB` or `/GUS` + BLASTER/ULTRASND |
+| **picogus** | `CALL C:\DRIVERS\HW\PGUSCD.BAT list\|load n\|eject` | BLASTER/ULTRASND; `PGUSINIT` mode; card firmware |
+| **picomem** | BIOS disk select for VHD/IMG; `PMCD.BAT` stub for CD | `C:\PICOMEM\PMINIT.EXE /SB 1` or `/GUS 1` |
+| **picoide** | Same helpers as PicoGUS (future) | TBD (pgusinit-like) |
+
+## PicoGUS USB images
+
+1. Build still stages pack sibling `cd/<game>/` with ISO/CUE files.
+2. Copy those images to a **FAT32 USB stick root** (no subfolders).
+3. Use `PGUSCD list` / `PGUSCD load n` (or `PGUSINIT /cdlist` / `/cdload n`).
+4. See pack `cd\INDEX.TXT` for suggested index order (alphabetical like firmware).
+
+## Drivers also on this VHD
+
+- `C:\DRIVERS\PICOGUS\` — CDMKE.SYS, PGUSINIT.EXE  
+- `C:\PICOMEM\` — PMINIT, PMEMM, PMDFS, PMMOUSE, SBCD, …  
+- `C:\ULTRASND\` — GUS software tree (when staged)  
+- `C:\DRIVERS\` — XCDROM, SHSUCDX, SBCTL, CTMOUSE, IMGTRY, …
+
+Full reference: docs/NATIVE_PC_PACK.md in ExoDOSConverter.

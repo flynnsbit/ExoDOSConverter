@@ -1,0 +1,41 @@
+@ECHO OFF
+REM PicoGUS / PicoIDE (future) CD helper
+REM Usage:
+REM   CALL C:\DRIVERS\HW\PGUSCD.BAT list
+REM   CALL C:\DRIVERS\HW\PGUSCD.BAT load <n>
+REM   CALL C:\DRIVERS\HW\PGUSCD.BAT eject
+REM Images must live on FAT32 USB root (copy from pack cd\ folder).
+REM See C:\DRIVERS\HW\README.HW and pack cd\INDEX.TXT
+
+SET PGUS=C:\DRIVERS\PICOGUS\PGUSINIT.EXE
+IF NOT EXIST %PGUS% SET PGUS=C:\DRIVERS\PICOGUS\pgusinit.exe
+IF NOT EXIST %PGUS% GOTO NOPGUS
+
+IF /I "%1"=="list"  GOTO LIST
+IF /I "%1"=="load"  GOTO LOAD
+IF /I "%1"=="eject" GOTO EJECT
+IF /I "%1"==""      GOTO LIST
+GOTO USAGE
+
+:LIST
+%PGUS% /cdlist
+GOTO END
+
+:LOAD
+IF "%2"=="" GOTO USAGE
+%PGUS% /cdload %2
+GOTO END
+
+:EJECT
+%PGUS% /cdload 0
+GOTO END
+
+:NOPGUS
+ECHO PGUSCD: PGUSINIT.EXE not found under C:\DRIVERS\PICOGUS
+GOTO END
+
+:USAGE
+ECHO Usage: CALL PGUSCD.BAT list ^| load n ^| eject
+GOTO END
+
+:END

@@ -297,9 +297,17 @@ class DosforgeVhdBuilder:
             return 'gus'
         return 'sb'
 
+    def _packTarget(self) -> str:
+        """mister | picomem | picogus | picoide."""
+        raw = str(self.conversionConf.get('misterTarget', '') or '').strip().lower()
+        if raw in ('mister', 'picomem', 'picogus', 'picoide'):
+            return raw
+        return 'mister'
+
     def _applyAudioModeToAutoexec(self, autoexecBytes: bytes) -> bytes:
-        """Rewrite AUTOEXEC audio block for SB or GUS (PMINIT /SB or /GUS)."""
+        """Rewrite AUTOEXEC audio + hardware block for SB/GUS and pack target."""
         mode = self._audioMode()
+        target = self._packTarget()
         try:
             # Prefer packcli helper when running from ExoDOSConverter tree.
             sys_path_root = self.scriptDir
@@ -313,9 +321,30 @@ class DosforgeVhdBuilder:
             )
             return autoexecBytes
         text = autoexecBytes.decode('ascii', errors='replace')
-        new = apply_audio_mode(text, mode)
+        new = apply_audio_mode(text, mode, target=target)
         new = new.replace('\r\n', '\n').replace('\n', '\r\n')
-        self.logger.log('  AUTOEXEC audio mode: %s' % mode)
+        self.logger.log('  AUTOEXEC audio mode: %s target: %s' % (mode, target))
+        return new.encode('ascii', errors='replace')
+
+    def _applyTargetToConfigSys(self, configBytes: bytes) -> bytes:
+        """Inject native CD DEVICE lines (e.g. CDMKE) when target needs them."""
+        target = self._packTarget()
+        try:
+            sys_path_root = self.scriptDir
+            if sys_path_root not in __import__('sys').path:
+                __import__('sys').path.insert(0, sys_path_root)
+            from packcli.audio_autoexec import apply_config_sys_target
+        except Exception as exc:
+            self.logger.log(
+                '  <WARNING> CONFIG.SYS target patch unavailable: %s' % exc,
+                self.logger.WARNING,
+            )
+            return configBytes
+        text = configBytes.decode('ascii', errors='replace')
+        new = apply_config_sys_target(text, target)
+        new = new.replace('\r\n', '\n').replace('\n', '\r\n')
+        if target in ('picogus', 'picoide'):
+            self.logger.log('  CONFIG.SYS: CDMKE.SYS for target %s' % target)
         return new.encode('ascii', errors='replace')
 
     def _writeRootBootFiles(self, stagingRoot, mode):
@@ -334,6 +363,7 @@ class DosforgeVhdBuilder:
 
         if configBytes:
             self.logger.log('  Installing Top300-style CONFIG.SYS (C: only)')
+            configBytes = self._applyTargetToConfigSys(configBytes)
             with open(os.path.join(stagingRoot, 'CONFIG.SYS'), 'wb') as fh:
                 fh.write(configBytes)
 

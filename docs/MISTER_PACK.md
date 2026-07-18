@@ -7,6 +7,9 @@
 - [install_fresh.md](install_fresh.md) — brand-new system, full shell steps  
 - [install_fresh_grok.md](install_fresh_grok.md) — start inside Grok Build CLI (minimal prompts)
 
+**Native PC (PicoMEM / PicoGUS / PicoIDE):** [NATIVE_PC_PACK.md](NATIVE_PC_PACK.md)  
+Recipe `options.target`: `mister` \| `picomem` \| `picogus` \| `picoide` — all driver trees staged every pack.
+
 Minimal path from a game list to a MiSTer ao486 pack **without** the converter GUI.
 
 ## Engines vs user data

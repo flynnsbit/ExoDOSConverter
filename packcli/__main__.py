@@ -86,6 +86,12 @@ def main(argv=None) -> int:
         default=None,
         help="AUTOEXEC audio: sb or gus (default: user config / sb)",
     )
+    p_reb.add_argument(
+        "--target",
+        choices=("mister", "picomem", "picogus", "picoide"),
+        default=None,
+        help="Hardware target for boot/CD helpers (default: config / mister)",
+    )
 
     p_patch = sub.add_parser(
         "patch-autoexec",
@@ -98,6 +104,12 @@ def main(argv=None) -> int:
         default=None,
         help="sb: BLASTER + PMINIT /SB 1; gus: ULTRASND + PMINIT /GUS 1 "
         "(default: config/env or sb)",
+    )
+    p_patch.add_argument(
+        "--target",
+        choices=("mister", "picomem", "picogus", "picoide"),
+        default=None,
+        help="Hardware target for init lines (default: config / mister)",
     )
     p_patch.add_argument(
         "--no-gus",
@@ -140,6 +152,7 @@ def main(argv=None) -> int:
             name=args.name,
             dosassets=args.dosassets,
             audio=args.audio or "",
+            target=args.target or "",
         )
     if args.cmd == "patch-autoexec":
         from packcli.patch_autoexec import run_patch_autoexec
@@ -147,7 +160,9 @@ def main(argv=None) -> int:
         audio = args.audio
         if audio is None and args.no_gus:
             audio = "sb"
-        return run_patch_autoexec(args.vhd, audio=audio)
+        return run_patch_autoexec(
+            args.vhd, audio=audio, target=args.target or None
+        )
     parser.print_help()
     return 2
 

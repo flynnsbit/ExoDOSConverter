@@ -94,6 +94,37 @@ def default_audio() -> str:
     return "sb"
 
 
+VALID_TARGETS = ("mister", "picomem", "picogus", "picoide")
+
+
+def normalize_target(value: str | None, default: str = "mister") -> str:
+    v = (value or default or "mister").strip().lower()
+    aliases = {
+        "ao486": "mister",
+        "mister-ao486": "mister",
+        "pm": "picomem",
+        "gus": "picogus",  # ambiguous; prefer explicit picogus
+        "picogus2": "picogus",
+        "ide": "picoide",
+    }
+    v = aliases.get(v, v)
+    if v not in VALID_TARGETS:
+        return default if default in VALID_TARGETS else "mister"
+    return v
+
+
+def default_target() -> str:
+    """Hardware pack target: mister | picomem | picogus | picoide.
+
+    Order: env ``MISTER_PACK_TARGET`` / ``PACK_TARGET`` → config ``target`` → mister.
+    """
+    raw = env_path(
+        "MISTER_PACK_TARGET",
+        env_path("PACK_TARGET", _cfg_str("target", "mister")),
+    )
+    return normalize_target(raw, "mister")
+
+
 def expand_path(value: str) -> str:
     if not value:
         return ""

@@ -74,12 +74,27 @@ def run_doctor() -> int:
     for rel, label in (
         ("data/mister/ultrasnd", "ULTRASND tree"),
         ("data/mister/picomem", "PICOMEM tree"),
+        ("data/native/picogus", "PicoGUS tools tree"),
+        ("data/native/hw", "HW helper BATs"),
     ):
         p = root / rel
         if p.is_dir():
             _ok(f"{label}: {p}")
         else:
             _bad(f"optional missing {label} ({p})")
+
+    # PicoGUS critical DOS tools (always staged for portability)
+    for rel, label in (
+        ("data/native/picogus/CDMKE.SYS", "CDMKE.SYS (PicoGUS CD)"),
+        ("data/native/picogus/PGUSINIT.EXE", "PGUSINIT.EXE"),
+        ("data/mister/picomem/PMINIT.EXE", "PMINIT.EXE"),
+    ):
+        p = root / rel
+        if p.is_file():
+            _ok(f"payload {label}")
+        else:
+            _bad(f"missing {label} ({p})")
+            failed += 1
 
     # collection
     coll = default_collection()
