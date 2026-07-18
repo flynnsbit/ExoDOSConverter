@@ -1,0 +1,6 @@
+# Modern deps for mister-pack / packcli (and headless convert).
+# Prefer this over the legacy requirements.txt freeze (Pillow==9.0.1 etc.),
+# which fails on Python 3.12+.
+PyYAML>=6.0
+Pillow>=10.0
+requests>=2.28

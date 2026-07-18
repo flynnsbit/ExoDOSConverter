@@ -136,6 +136,12 @@ def run_doctor() -> int:
     print()
     if failed:
         print(f"doctor: {failed} problem(s)")
+        print(
+            "  Install/update open-source engines with:\n"
+            "    python3 -m packcli setup\n"
+            "  Point at your eXoDOS collection (not auto-downloaded) with:\n"
+            "    python3 -m packcli setup --collection /path/to/eXoDOS"
+        )
         return 1
     print("doctor: all required checks passed")
     return 0

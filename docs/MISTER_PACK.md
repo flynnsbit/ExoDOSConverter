@@ -6,14 +6,29 @@ Minimal path from a game list to a MiSTer ao486 pack **without** the converter G
 
 ## Setup (once)
 
+Open-source engines (**dosforge** + **ExoDOSConverter**) install/update from GitHub.
+The **eXoDOS game collection** and **dosassets** (DOS install media) are **never**
+downloaded — you point at local paths you already have.
+
 ```bash
-export EXODOS_COLLECTION=/path/to/eXoDOS
-export DOSFORGE_DOSASSETS_DIR=~/Projects/dosforge/dosassets
-cd /path/to/ExoDOSConverter
+# Install/update dosforge (latest release) + ExoDOSConverter (git master)
+python3 -m packcli setup
+
+# Save your user paths (collection + dosassets) into ~/.config/mister-pack/config.toml
+python3 -m packcli setup \
+  --collection /path/to/eXoDOS \
+  --dosassets ~/Projects/dosforge/dosassets \
+  --audio gus
+
 python3 -m packcli doctor
 ```
 
-Requires: Python 3.10+, `dosforge` on PATH, this checkout, eXoDOS v6 tree, dosassets.
+| Auto-installed / updated | User must supply |
+|--------------------------|------------------|
+| dosforge (latest GitHub release via pip) | eXoDOS collection root (`eXo/eXoDOS/`) |
+| ExoDOSConverter (clone/pull master + packcli deps) | dosassets (msdos622 / freedos media) |
+
+Requires: Python 3.10+, network for first setup, Linux `sudo -n` for NBD VHD create.
 
 ## Commands
 

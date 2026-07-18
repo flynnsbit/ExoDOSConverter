@@ -98,6 +98,29 @@ python3 -m packcli doctor
 
 Must report OK for: Python, dosforge, boot-c.zip, distro.zip, eXoDOSv6.csv, collection, dosassets. Fix failures before building.
 
+### Install / update open-source engines (not the game collection)
+
+```bash
+# Install or update dosforge (latest GitHub release) + ExoDOSConverter (git master)
+python3 -m packcli setup
+
+# Also save your eXoDOS + dosassets paths into ~/.config/mister-pack/config.toml
+python3 -m packcli setup \
+  --collection /path/to/eXoDOS \
+  --dosassets ~/Projects/dosforge/dosassets \
+  --audio gus
+
+# Force reinstall/update
+python3 -m packcli setup --force
+```
+
+| Auto-installed / updated | User must supply (never downloaded) |
+|--------------------------|-------------------------------------|
+| **dosforge** (latest release tag via pip+git) | **eXoDOS collection** path |
+| **ExoDOSConverter** (git clone/pull master + pip deps) | **dosassets** (MS-DOS/FreeDOS floppies) |
+| packcli Python deps | |
+
+When the user has not set a collection path, **ask once** for the eXoDOS root (folder containing `eXo/eXoDOS/`), then run `setup --collection …` or write `config.toml`.
 ---
 
 ## 3. CLI reference
@@ -271,8 +294,10 @@ No full convert required.
 
 ### A. First-time / “is my machine ready?”
 
-1. `python3 -m packcli doctor`
-2. Report failures; set env or `config.toml`; re-run doctor.
+1. `python3 -m packcli setup` — install/update dosforge + ExoDOSConverter from GitHub.
+2. If collection unknown, **ask the user** where eXoDOS is installed (never download it).
+3. `python3 -m packcli setup --collection /their/path --dosassets /their/dosassets`
+4. `python3 -m packcli doctor` — all required checks green.
 
 ### B. “Make a pack with these games…”
 
@@ -312,6 +337,7 @@ python3 -m packcli patch-autoexec <vhd> --audio sb   # or gus
 | User says | Agent does |
 |-----------|------------|
 | `/mister-pack doctor` | `python3 -m packcli doctor` |
+| Install / update tools | `python3 -m packcli setup` (+ ask for eXoDOS path if unset) |
 | Create GUS pack with DOOM and Blood | resolve → recipe `audio: gus` → build |
 | Pack with SB only | recipe `audio: sb` → build |
 | What’s the exact name for raptor? | `resolve raptor` → print best title |

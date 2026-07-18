@@ -16,6 +16,47 @@ def main(argv=None) -> int:
 
     sub.add_parser("doctor", help="Check collection, dosforge, payloads, dosassets")
 
+    p_setup = sub.add_parser(
+        "setup",
+        help="Install/update open-source dosforge + ExoDOSConverter (not eXoDOS games)",
+    )
+    p_setup.add_argument(
+        "--force",
+        action="store_true",
+        help="Reinstall/update even if already current (converter: hard reset to origin/master)",
+    )
+    p_setup.add_argument(
+        "--converter-dir",
+        default="",
+        help="Where to clone/update ExoDOSConverter (default: this tree or ~/Projects/ExoDOSConverter)",
+    )
+    p_setup.add_argument(
+        "--collection",
+        default="",
+        help="User eXoDOS root path (saved to config; never downloaded)",
+    )
+    p_setup.add_argument(
+        "--dosassets",
+        default="",
+        help="User dosassets path (saved to config; never downloaded)",
+    )
+    p_setup.add_argument(
+        "--audio",
+        choices=("sb", "gus"),
+        default=None,
+        help="Default AUTOEXEC audio mode to save in config",
+    )
+    p_setup.add_argument(
+        "--skip-dosforge",
+        action="store_true",
+        help="Only update ExoDOSConverter",
+    )
+    p_setup.add_argument(
+        "--skip-converter",
+        action="store_true",
+        help="Only update dosforge",
+    )
+
     p_res = sub.add_parser("resolve", help="Fuzzy-match game titles")
     p_res.add_argument("query", nargs="+", help="Search string(s)")
     p_res.add_argument("--limit", type=int, default=15)
@@ -70,6 +111,18 @@ def main(argv=None) -> int:
         from packcli.doctor import run_doctor
 
         return run_doctor()
+    if args.cmd == "setup":
+        from packcli.setup_prereqs import run_setup
+
+        return run_setup(
+            force=args.force,
+            converter_dir=args.converter_dir or None,
+            collection=args.collection or None,
+            dosassets=args.dosassets or None,
+            audio=args.audio,
+            skip_dosforge=args.skip_dosforge,
+            skip_converter=args.skip_converter,
+        )
     if args.cmd == "resolve":
         from packcli.resolve import run_resolve
 
