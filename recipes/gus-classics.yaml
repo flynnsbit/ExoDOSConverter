@@ -1,0 +1,24 @@
+# Example production recipe — GUS/PicoMEM classics pack
+name: GUS Classics
+collection: ${EXODOS_COLLECTION}
+output: ./out/mister-gus-pack
+games:
+  - One Must Fall 2097 (1994)
+  - DOOM (1993)
+  - Jazz Jackrabbit CD-ROM (1994)
+  - Epic Pinball - The Complete Collection (1995)
+  - Pinball Fantasies (1992)
+  - Raptor - Call of the Shadows (1994)
+  - Crusader - No Remorse (1995)
+  - Duke Nukem 3D (1996)
+  - Fallout (1997)
+  - Blood (1997)
+  - Shadow Warrior (1997)
+options:
+  launcher: mymenu
+  audio: gus
+  boot: auto
+  prefer_gus: true
+  pminit_gus: true
+  include_ultrasnd: true
+  include_picomem: true
