@@ -21,7 +21,9 @@ Production path: **recipe → convert → dosforge VHD**. Stay in Grok CLI. Do *
 **Fresh install (Grok CLI, minimal):** `docs/install_fresh_grok.md`  
   — new users: clone this repo, start Grok from repo root, *then* `/mister-pack`  
 **Native PC targets:** `docs/NATIVE_PC_PACK.md` — `options.target`: mister \| picomem \| picogus \| picoide  
-  (all drivers staged every pack; CD helpers under `C:\DRIVERS\HW\`)
+  (all drivers staged every pack; CD helpers under `C:\DRIVERS\HW\`)  
+**DOS version:** `docs/BOOT_DOS_MATRIX.md` — `options.dos` / `boot`: `auto` (default **msdos622**, large → **msdos71** FAT32) or any dosforge mode.  
+  CONFIG.SYS/AUTOEXEC generated per DOS (DEVICEHIGH/LOADHIGH or QEMM when no UMB). Ask user which DOS if unspecified and not auto.
 
 ---
 
@@ -248,7 +250,8 @@ options:
   launcher: mymenu          # mymenu | none (single-game direct launch)
   target: mister            # mister | picomem | picogus | picoide
   audio: gus                # sb | gus  (see §5; common to all targets)
-  boot: auto                # auto | msdos622 | freedos
+  dos: auto                 # auto | msdos622 | msdos71 | freedos | pcdos71 | … (see BOOT_DOS_MATRIX.md)
+  boot: auto                # alias of dos (dosforge boot-mode)
   prefer_gus: true          # implied when audio: gus
   pminit_gus: true          # implied when audio: gus
   include_qemm: true
@@ -354,8 +357,12 @@ No full convert required.
 
 1. `doctor` if not green this session; if engines missing → `setup` first.
 2. `resolve` each fuzzy name → exact titles.
-3. Write `recipe.yaml` (use `audio: gus` or `sb` from user intent; default config otherwise).
-4. `python3 -m packcli build -f recipe.yaml`
+3. **DOS version:** if user did not specify, either use `dos: auto` or **ask**:
+   - Default **MS-DOS 6.22** (FAT16)
+   - Large packs / FAT32: **MS-DOS 7.1**, **PC-DOS 7.1**, or **FreeDOS**
+   - Full list: any dosforge `--boot-mode` (see `docs/BOOT_DOS_MATRIX.md`)
+4. Write `recipe.yaml` (`audio`, `target`, `dos`/`boot`).
+5. `python3 -m packcli build -f recipe.yaml`
 5. On success, print absolute path to `ao486/` folder (VHD + `cd/`).
 6. Checklist:
    - [ ] `.vhd` present  

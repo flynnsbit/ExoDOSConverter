@@ -1,0 +1,35 @@
+name: Top 80s DOS (SB)
+collection: ${EXODOS_COLLECTION}
+output: ./out/top80s-sb
+
+# Top 20 classic late-80s / early PC classics — Sound Blaster / Adlib
+games:
+  - Maniac Mansion (1987)
+  - Zak McKracken and the Alien Mindbenders (1988)
+  - Leisure Suit Larry 1 - In The Land of the Lounge Lizards (1987)
+  - King's Quest I - Quest for the Crown (1984)
+  - Space Quest I - The Sarien Encounter (1986)
+  - Police Quest 1 - In Pursuit of the Death Angel (1987)
+  - Indiana Jones and The Last Crusade (1989)
+  - Prince of Persia (1990)
+  - SimCity (1989)
+  - Populous (1989)
+  - Elite (1987)
+  - Ultima IV - Quest of the Avatar (1985)
+  - Ultima V - Warriors of Destiny (1988)
+  - Might and Magic - Book 1 (1986)
+  - Dungeon Master (1989)
+  - Wasteland (1988)
+  - Starflight (1986)
+  - Arkanoid (1988)
+  - Tetris (1986)
+  - California Games (1988)
+
+options:
+  target: mister
+  audio: sb
+  boot: auto
+  launcher: mymenu
+  include_qemm: true
+  long_game_folder: true
+  generate_readme_ans: true

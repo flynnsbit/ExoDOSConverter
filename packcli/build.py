@@ -68,7 +68,7 @@ def build_from_recipe(recipe: PackRecipe) -> int:
     print("  games:     ", len(recipe.games), flush=True)
     print("  target:    ", recipe.target, flush=True)
     print("  audio:     ", recipe.audio, "prefer_gus=", recipe.prefer_gus, flush=True)
-    print("  boot:      ", recipe.boot, flush=True)
+    print("  dos/boot:  ", recipe.boot, flush=True)
     print(
         "  dosforge:  ",
         dosforgevhd.DosforgeVhdBuilder.isAvailable({}),

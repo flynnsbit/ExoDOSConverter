@@ -136,6 +136,49 @@ def default_audio() -> str:
 
 VALID_TARGETS = ("mister", "picomem", "picogus", "picoide")
 
+# dosforge create --boot-mode values (+ auto)
+VALID_BOOT_MODES = (
+    "auto",
+    "none",
+    "freedos",
+    "msdos71",
+    "ibm8088",
+    "msdos33",
+    "msdos331",
+    "msdos5",
+    "msdos6",
+    "msdos622",
+    "pcdos7",
+    "pcdos2000",
+    "pcdos71",
+    "compaq331",
+    "compaq2",
+    "pcdos3",
+    "pcdos5",
+    "compaq3",
+    "drdos6",
+    "drdos7",
+    "4dos",
+)
+
+
+def normalize_boot_mode(value: str | None, default: str = "auto") -> str:
+    try:
+        from packcli.boot_rules.capabilities import normalize_boot_mode as _norm
+
+        return _norm(value, default)
+    except Exception:
+        v = (value or default or "auto").strip().lower()
+        return v if v in VALID_BOOT_MODES else default
+
+
+def default_boot_mode() -> str:
+    raw = env_path(
+        "MISTER_PACK_DOS",
+        env_path("MISTER_PACK_BOOT", _cfg_str("dos", _cfg_str("boot", "auto"))),
+    )
+    return normalize_boot_mode(raw or "auto", "auto")
+
 
 def normalize_target(value: str | None, default: str = "mister") -> str:
     v = (value or default or "mister").strip().lower()

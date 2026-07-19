@@ -8,11 +8,13 @@ from typing import Any, List, Optional
 
 from packcli.config import (
     default_audio,
+    default_boot_mode,
     default_collection,
     default_dosassets,
     default_output,
     default_target,
     expand_path,
+    normalize_boot_mode,
     normalize_target,
 )
 
@@ -27,7 +29,7 @@ class PackRecipe:
     launcher: str = "mymenu"
     audio: str = "sb"  # sb | gus
     target: str = "mister"  # mister | picomem | picogus | picoide
-    boot: str = "auto"  # auto | msdos622 | freedos
+    boot: str = "auto"  # auto | msdos622 | msdos71 | freedos | … (dosforge modes)
     prefer_gus: bool = False
     include_qemm: bool = True
     include_ultrasnd: bool = True
@@ -46,7 +48,7 @@ class PackRecipe:
             launcher=self.launcher or "mymenu",
             audio=(self.audio or "sb").lower(),
             target=normalize_target(self.target or default_target()),
-            boot=(self.boot or "auto").lower(),
+            boot=normalize_boot_mode(self.boot or default_boot_mode()),
             prefer_gus=bool(self.prefer_gus),
             include_qemm=bool(self.include_qemm),
             include_ultrasnd=bool(self.include_ultrasnd),
@@ -112,7 +114,14 @@ def load_recipe(path: str | Path) -> PackRecipe:
         target=str(
             opts.get("target") or data.get("target") or default_target() or "mister"
         ),
-        boot=str(opts.get("boot") or data.get("boot") or "auto"),
+        boot=str(
+            opts.get("dos")
+            or opts.get("boot")
+            or data.get("dos")
+            or data.get("boot")
+            or default_boot_mode()
+            or "auto"
+        ),
         prefer_gus=_as_bool(opts.get("prefer_gus") or data.get("prefer_gus")),
         include_qemm=_as_bool(opts.get("include_qemm"), True),
         include_ultrasnd=_as_bool(opts.get("include_ultrasnd"), True),

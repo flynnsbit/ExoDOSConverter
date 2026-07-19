@@ -181,15 +181,16 @@ class DosforgeVhdBuilder:
                 )
                 # Drop anything that would overwrite dosforge OS bootstrap.
                 self._stripProtectedRootSystemFiles(stagingRoot)
-                # Top300 multi-config CONFIG.SYS + AUTOEXEC ending in MyMenu (C: only).
-                self._writeRootBootFiles(stagingRoot, mode)
 
                 stagedBytes, requiredFree = self._helper.__calculateRequiredFreeBytes__(
                     stagingRoot
                 )
+                # Resolve boot-mode/FAT before generating CONFIG/AUTOEXEC so
+                # version-aware rules match dosforge create.
                 sizeBytes, fatFormat, bootMode = self._pickSizeAndFormat(
                     stagedBytes, requiredFree
                 )
+                self._writeRootBootFiles(stagingRoot, mode)
 
                 buildName = self._helper.__resolveBuildName__(mode, gameFolders)
                 buildOutputDir = self._helper.__createBuildOutputDir__(buildName)
@@ -304,6 +305,13 @@ class DosforgeVhdBuilder:
             return raw
         return 'mister'
 
+    def _packBootMode(self) -> str:
+        """Resolved dosforge boot-mode (never 'auto' after pick)."""
+        raw = str(self.conversionConf.get('misterBootMode', 'auto') or 'auto').strip().lower()
+        if raw and raw != 'auto':
+            return raw
+        return 'msdos622'
+
     def _applyAudioModeToAutoexec(self, autoexecBytes: bytes) -> bytes:
         """Rewrite AUTOEXEC audio + hardware block for SB/GUS and pack target."""
         mode = self._audioMode()
@@ -348,132 +356,67 @@ class DosforgeVhdBuilder:
         return new.encode('ascii', errors='replace')
 
     def _writeRootBootFiles(self, stagingRoot, mode):
-        """Write Top300-style CONFIG.SYS + AUTOEXEC.BAT for MiSTer boot.
+        """Write version-aware CONFIG.SYS + AUTOEXEC.BAT for the pack.
 
-        Prefer templates from ``data/mister/boot-c.zip`` (Top300 ``_C`` adapted
-        for single-VHD C: layout with MyMenu at the end). Fall back to a
-        minimal MyMenu-only AUTOEXEC if the archive is missing.
+        Uses ``packcli.boot_rules`` so only directives valid for the selected
+        dosforge boot-mode are emitted, maximizing conventional memory
+        (DOS=HIGH/UMB, DEVICEHIGH/LOADHIGH, or QEMM when needed).
 
-        Critical: never CALL a long-named bat (e.g. AUTORUN_EDC.BAT) before
-        DOSLFN is loaded — MS-DOS 6.22 without LFN will not find it and will
-        drop straight to ``C:\\>``.
+        Critical: never CALL a long-named bat before LFN is loaded when LFN
+        is used — MS-DOS 6.22 without LFN will not find long names.
         """
+        bootMode = self._packBootMode()
+        audio = self._audioMode()
+        target = self._packTarget()
+        includeQemm = str(
+            self.conversionConf.get('misterIncludeQemm', 'true') or 'true'
+        ).strip().lower() not in ('0', 'false', 'no', 'off')
+        launcher = 'none' if mode == 'single' else str(
+            self.conversionConf.get('misterLauncher', 'mymenu') or 'mymenu'
+        )
+
+        try:
+            import sys as _sys
+
+            if self.scriptDir not in _sys.path:
+                _sys.path.insert(0, self.scriptDir)
+            from packcli.boot_rules import render_boot_files
+
+            configBytes, autoexecBytes = render_boot_files(
+                bootMode,
+                audio=audio,
+                target=target,
+                include_qemm=includeQemm,
+                launcher=launcher,
+            )
+            self.logger.log(
+                '  Installing pack CONFIG.SYS / AUTOEXEC.BAT '
+                '(dos=%s audio=%s target=%s launcher=%s)'
+                % (bootMode, audio, target, launcher)
+            )
+            with open(os.path.join(stagingRoot, 'CONFIG.SYS'), 'wb') as fh:
+                fh.write(configBytes)
+            with open(os.path.join(stagingRoot, 'AUTOEXEC.BAT'), 'wb') as fh:
+                fh.write(autoexecBytes)
+            return
+        except Exception as exc:
+            self.logger.log(
+                '  <WARNING> boot_rules render failed (%s); falling back to boot-c templates'
+                % exc,
+                self.logger.WARNING,
+            )
+
+        # Fallback: legacy boot-c.zip templates + audio patch
         configBytes = mymenupacker.bootCTemplateBytes(self.scriptDir, 'CONFIG.SYS')
         autoexecBytes = mymenupacker.bootCTemplateBytes(self.scriptDir, 'AUTOEXEC.BAT')
-
         if configBytes:
-            self.logger.log('  Installing Top300-style CONFIG.SYS (C: only)')
             configBytes = self._applyTargetToConfigSys(configBytes)
             with open(os.path.join(stagingRoot, 'CONFIG.SYS'), 'wb') as fh:
                 fh.write(configBytes)
-
-        if autoexecBytes and mode != 'single':
-            self.logger.log(
-                '  Installing Top300-style AUTOEXEC.BAT (C: only, MyMenu end)'
-            )
+        if autoexecBytes:
             autoexecBytes = self._applyAudioModeToAutoexec(autoexecBytes)
             with open(os.path.join(stagingRoot, 'AUTOEXEC.BAT'), 'wb') as fh:
                 fh.write(autoexecBytes)
-            dosSrc = os.path.join(stagingRoot, 'DOS')
-            if os.path.isdir(dosSrc):
-                self.logger.log('  DOS supplements staged for HIMEM/EMM386/SETVER')
-            return
-
-        if mode == 'single':
-            # Direct-to-game: keep Top300 driver loaders, but end with RUNMENU
-            # (which CDs into the only game and calls autorun/1_Start) — never
-            # MyMenu. Prefer rewriting the boot-c AUTOEXEC body when present.
-            self.logger.log(
-                '  Installing AUTOEXEC.BAT for single-game direct launch (no MyMenu)'
-            )
-            if autoexecBytes:
-                text = autoexecBytes.decode('ascii', errors='replace')
-                # Cut off at the MyMenu frontend block; replace with RUNMENU only.
-                marker = 'REM --- MyMenu frontend'
-                if marker in text:
-                    text = text.split(marker)[0]
-                lines = [ln.rstrip('\r\n') for ln in text.replace('\r\n', '\n').split('\n')]
-                while lines and lines[-1].strip() in ('', ':END', 'GOTO END', ':CLEAN'):
-                    lines.pop()
-                # Drop any leftover :CLEAN section if split left mid-file junk
-                cleaned = []
-                for ln in lines:
-                    if ln.strip().upper() == ':CLEAN':
-                        break
-                    cleaned.append(ln)
-                lines = cleaned
-                lines.extend([
-                    '',
-                    'REM --- single game direct launch (misterLauncher=none) ---',
-                    'IF EXIST C:\\RUNMENU.BAT CALL C:\\RUNMENU.BAT',
-                    'GOTO END',
-                    '',
-                    ':CLEAN',
-                    'IF EXIST C:\\DRIVERS\\SHSUCDX.COM C:\\DRIVERS\\SHSUCDX.COM /D:IDE-CD /L:D /V /C',
-                    'IF EXIST C:\\DRIVERS\\CUTEPACK\\CTMOUSE.EXE C:\\DRIVERS\\CUTEPACK\\CTMOUSE.EXE /O',
-                    '@ECHO.',
-                    '@ECHO CLEAN profile: game not auto-loaded.',
-                    'GOTO END',
-                    '',
-                    ':END',
-                ])
-                # Apply SB/GUS audio block after single-game rewrite.
-                path = os.path.join(stagingRoot, 'AUTOEXEC.BAT')
-                self._helper.__writeDosTextFile__(path, lines)
-                try:
-                    raw = open(path, 'rb').read()
-                    open(path, 'wb').write(self._applyAudioModeToAutoexec(raw))
-                except OSError:
-                    pass
-            else:
-                self._helper.__writeDosTextFile__(
-                    os.path.join(stagingRoot, 'AUTOEXEC.BAT'),
-                    [
-                        '@ECHO OFF',
-                        'PROMPT $P$G',
-                        'PATH C:\\;C:\\DOS;C:\\DRIVERS;C:\\UTILS;C:\\MYMENU;C:\\MYMENU\\UTILS',
-                        'IF EXIST C:\\MYMENU\\UTILS\\DOSLFNM.COM C:\\MYMENU\\UTILS\\DOSLFNM.COM',
-                        'IF EXIST C:\\RUNMENU.BAT CALL C:\\RUNMENU.BAT',
-                    ],
-                )
-                path = os.path.join(stagingRoot, 'AUTOEXEC.BAT')
-                try:
-                    raw = open(path, 'rb').read()
-                    open(path, 'wb').write(self._applyAudioModeToAutoexec(raw))
-                except OSError:
-                    pass
-            return
-
-        self.logger.log(
-            '  <WARNING> boot-c templates missing; writing minimal MyMenu AUTOEXEC',
-            self.logger.WARNING,
-        )
-        autoexec = [
-            '@ECHO OFF',
-            'PROMPT $P$G',
-            'PATH C:\\;C:\\DOS;C:\\FDOS;C:\\FDOS\\BIN;C:\\DRIVERS;C:\\UTILS;C:\\MYMENU;C:\\MYMENU\\UTILS',
-            'IF EXIST C:\\MYMENU\\UTILS\\DOSLFNM.COM C:\\MYMENU\\UTILS\\DOSLFNM.COM',
-            'IF EXIST C:\\RUNMENU.BAT CALL C:\\RUNMENU.BAT',
-            'IF EXIST C:\\MYMENU\\MENU.BAT CALL C:\\MYMENU\\MENU.BAT',
-            'IF EXIST C:\\MYMENU\\MYMENU.EXE C:\\MYMENU\\MYMENU.EXE C:\\GAMES',
-            ':REMENU',
-            'IF EXIST C:\\RUNMENU.BAT CALL C:\\RUNMENU.BAT',
-            'IF EXIST C:\\MYMENU\\MENU.BAT CALL C:\\MYMENU\\MENU.BAT',
-            'GOTO REMENU',
-        ]
-        self._helper.__writeDosTextFile__(
-            os.path.join(stagingRoot, 'AUTOEXEC.BAT'), autoexec
-        )
-        if not configBytes:
-            config_lines = [
-                'FILES=40',
-                'BUFFERS=30',
-                'STACKS=9,256',
-                'SHELL=C:\\COMMAND.COM C:\\ /E:1024 /P',
-            ]
-            self._helper.__writeDosTextFile__(
-                os.path.join(stagingRoot, 'CONFIG.SYS'), config_lines
-            )
 
     def _pickSizeAndFormat(self, stagedBytes, requiredFree):
         """Return (size_bytes, fat_format, boot_mode)."""
@@ -494,39 +437,41 @@ class DosforgeVhdBuilder:
 
         sizeBytes = max(_MIN_VHD_BYTES, int(math.ceil(base / (1024 * 1024.0)) * 1024 * 1024))
 
-        if confMode not in ('', 'auto'):
-            bootMode = confMode
-            if bootMode in ('msdos71', 'freedos', 'pcdos71'):
-                fatFormat = 'fat32' if sizeBytes > 512 * 1024 * 1024 else 'fat16'
-                if bootMode == 'msdos622':
-                    fatFormat = 'fat16'
-            elif bootMode in ('msdos622', 'msdos5', 'msdos6', 'compaq331'):
-                fatFormat = 'fat16'
-                if sizeBytes > _FAT16_SOFT_CAP_BYTES:
-                    raise RuntimeError(
-                        'Configured boot-mode %s cannot hold %s (FAT16 soft cap ~1.9 GiB). '
-                        'Use misterBootMode=msdos71 or freedos.'
-                        % (bootMode, self._helper.__formatBytes__(sizeBytes))
-                    )
-            else:
-                fatFormat = 'fat16'
-            return sizeBytes, fatFormat, bootMode
+        try:
+            import sys as _sys
 
-        # auto: promote to FAT32 when over soft cap or many games force All-Games view later
-        if sizeBytes > _FAT16_SOFT_CAP_BYTES:
-            bootMode = 'msdos71'
-            fatFormat = 'fat32'
-            self.logger.log(
-                '  Auto-selected %s/%s (payload needs %s)'
-                % (bootMode, fatFormat, self._helper.__formatBytes__(sizeBytes))
+            if self.scriptDir not in _sys.path:
+                _sys.path.insert(0, self.scriptDir)
+            from packcli.boot_rules import resolve_boot_and_fat
+
+            bootMode, fatFormat = resolve_boot_and_fat(
+                confMode or 'auto',
+                size_bytes=sizeBytes,
+                fat16_cap=_FAT16_SOFT_CAP_BYTES,
             )
-        else:
-            bootMode = 'msdos622'
-            fatFormat = 'fat16'
-            self.logger.log(
-                '  Auto-selected %s/%s (size %s)'
-                % (bootMode, fatFormat, self._helper.__formatBytes__(sizeBytes))
-            )
+        except ValueError as exc:
+            raise RuntimeError(str(exc)) from exc
+        except Exception:
+            # Fallback if packcli unavailable
+            if confMode not in ('', 'auto'):
+                bootMode = confMode
+                fatFormat = (
+                    'fat32'
+                    if bootMode in ('msdos71', 'freedos', 'pcdos71')
+                    and sizeBytes > 512 * 1024 * 1024
+                    else 'fat16'
+                )
+            elif sizeBytes > _FAT16_SOFT_CAP_BYTES:
+                bootMode, fatFormat = 'msdos71', 'fat32'
+            else:
+                bootMode, fatFormat = 'msdos622', 'fat16'
+
+        # Persist resolved mode so CONFIG/AUTOEXEC generation matches create
+        self.conversionConf['misterBootMode'] = bootMode
+        self.logger.log(
+            '  Boot plan: dos=%s format=%s size=%s'
+            % (bootMode, fatFormat, self._helper.__formatBytes__(sizeBytes))
+        )
         return sizeBytes, fatFormat, bootMode
 
     @staticmethod
