@@ -82,6 +82,21 @@ class ExoGUI:
         self.outputCfgEntry = None
         self.mapSticksCheckButton = None
         self.useKeyb2JoypadCheckButton = None
+        self.misterPackFrame = None
+        self.misterPackComponents = []
+        self.misterBootModeComboBox = None
+        self.misterAudioComboBox = None
+        self.misterTargetComboBox = None
+        self.misterLauncherComboBox = None
+        self.misterUseDosforgeComboBox = None
+        self.misterDosInstallProfileComboBox = None
+        self.misterDosforgeBootAssetsEntry = None
+        self.selectMisterDosforgeBootAssetsButton = None
+        self.misterDosforgeExecutableEntry = None
+        self.selectMisterDosforgeExecutableButton = None
+        self.misterSaveBufferMiBEntry = None
+        self.misterIncludeQemmCheckButton = None
+        self.misterGenerateReadmeAnsCheckButton = None
         self.selectionFrame = None
         self.filterEntry = None
         self.customSelectionFrame = None
@@ -197,6 +212,7 @@ class ExoGUI:
         self.__drawGenericConfigurationFrame__()
         self.__drawBasicConfigurationFrame__()
         self.__drawExpertConfigurationFrame__()
+        self.__drawMisterPackConfigurationFrame__()
         self.__checkExpertMode__()
         self.loading = False
 
@@ -221,13 +237,7 @@ class ExoGUI:
         wckToolTips.register(self.collectionVersionLabel, self.guiStrings['collectionVersion'].help)
         self.collectionVersionLabel.grid(column=0, row=0, sticky="W")
 
-        # empty frame
-        Tk.Frame(self.conversionFrame).grid(column=1, row=0, sticky="EW")
-
         # Conversion Type frame
-        # self.collectionFrame = Tk.Frame(self.configurationFrame)
-        # self.collectionFrame.grid(column=0, row=1, padx=5, sticky="EW")
-
         self.conversionTypeLabel = Tk.Label(self.versionFrame, text=self.guiStrings['conversionType'].label)
         wckToolTips.register(self.conversionTypeLabel, self.guiStrings['conversionType'].help)
         self.conversionTypeLabel.grid(column=2, row=0, sticky="W")
@@ -438,6 +448,229 @@ class ExoGUI:
 
         # empty frame
         Tk.Frame(self.conversionFrame).grid(column=7, row=0, sticky="EW")
+
+    def __confGet__(self, key, default=''):
+        """Read configuration value with default when key missing from conf file."""
+        return str(self.configuration.get(key, default) if self.configuration.get(key, default) is not None else default)
+
+    def __drawMisterPackConfigurationFrame__(self):
+        """MiSTer / native pack options (DOS, audio, target, dosforge, launcher)."""
+        self.misterPackFrame = Tk.LabelFrame(
+            self.configurationFrame,
+            text=self.guiStrings['misterPackSettings'].label,
+            pady=5,
+            padx=5,
+        )
+        self.misterPackFrame.grid(column=0, row=4, padx=5, pady=5, sticky="EW")
+        self.misterPackFrame.columnconfigure(1, weight=1)
+        self.misterPackFrame.columnconfigure(3, weight=1)
+        wckToolTips.register(self.misterPackFrame, self.guiStrings['misterPackSettings'].help)
+
+        self.misterPackComponents = []
+        row = 0
+
+        # Row 0: DOS/boot mode + Audio
+        label = Tk.Label(self.misterPackFrame, text=self.guiStrings['misterBootMode'].label)
+        wckToolTips.register(label, self.guiStrings['misterBootMode'].help)
+        label.grid(column=0, row=row, sticky="W", pady=2)
+        self.misterPackComponents.append(label)
+        bootModes = util.getMisterBootModes()
+        self.guiVars['misterBootMode'] = Tk.StringVar()
+        bootVal = self.__confGet__('misterBootMode', 'auto')
+        if bootVal not in bootModes:
+            bootVal = 'auto'
+        self.guiVars['misterBootMode'].set(bootVal)
+        self.misterBootModeComboBox = ttk.Combobox(
+            self.misterPackFrame, state="readonly", textvariable=self.guiVars['misterBootMode'], width=14
+        )
+        self.misterBootModeComboBox['values'] = bootModes
+        self.misterBootModeComboBox.grid(column=1, row=row, sticky="W", padx=5, pady=2)
+        self.misterPackComponents.append(self.misterBootModeComboBox)
+
+        label = Tk.Label(self.misterPackFrame, text=self.guiStrings['misterAudio'].label)
+        wckToolTips.register(label, self.guiStrings['misterAudio'].help)
+        label.grid(column=2, row=row, sticky="W", padx=(10, 0), pady=2)
+        self.misterPackComponents.append(label)
+        self.guiVars['misterAudio'] = Tk.StringVar()
+        audioVal = self.__confGet__('misterAudio', 'sb')
+        if audioVal not in util.misterAudioModes:
+            audioVal = 'sb'
+        self.guiVars['misterAudio'].set(audioVal)
+        self.misterAudioComboBox = ttk.Combobox(
+            self.misterPackFrame, state="readonly", textvariable=self.guiVars['misterAudio'], width=8
+        )
+        self.misterAudioComboBox['values'] = util.misterAudioModes
+        self.misterAudioComboBox.bind('<<ComboboxSelected>>', self.__onMisterAudioChanged__)
+        self.misterAudioComboBox.grid(column=3, row=row, sticky="W", padx=5, pady=2)
+        self.misterPackComponents.append(self.misterAudioComboBox)
+
+        # Row 1: Hardware target + Launcher
+        row = 1
+        label = Tk.Label(self.misterPackFrame, text=self.guiStrings['misterTarget'].label)
+        wckToolTips.register(label, self.guiStrings['misterTarget'].help)
+        label.grid(column=0, row=row, sticky="W", pady=2)
+        self.misterPackComponents.append(label)
+        self.guiVars['misterTarget'] = Tk.StringVar()
+        targetVal = self.__confGet__('misterTarget', 'mister')
+        if targetVal not in util.misterTargets:
+            targetVal = 'mister'
+        self.guiVars['misterTarget'].set(targetVal)
+        self.misterTargetComboBox = ttk.Combobox(
+            self.misterPackFrame, state="readonly", textvariable=self.guiVars['misterTarget'], width=14
+        )
+        self.misterTargetComboBox['values'] = util.misterTargets
+        self.misterTargetComboBox.grid(column=1, row=row, sticky="W", padx=5, pady=2)
+        self.misterPackComponents.append(self.misterTargetComboBox)
+
+        label = Tk.Label(self.misterPackFrame, text=self.guiStrings['misterLauncher'].label)
+        wckToolTips.register(label, self.guiStrings['misterLauncher'].help)
+        label.grid(column=2, row=row, sticky="W", padx=(10, 0), pady=2)
+        self.misterPackComponents.append(label)
+        self.guiVars['misterLauncher'] = Tk.StringVar()
+        launcherVal = self.__confGet__('misterLauncher', 'mymenu')
+        if launcherVal not in util.misterLaunchers:
+            launcherVal = 'mymenu'
+        self.guiVars['misterLauncher'].set(launcherVal)
+        self.misterLauncherComboBox = ttk.Combobox(
+            self.misterPackFrame, state="readonly", textvariable=self.guiVars['misterLauncher'], width=8
+        )
+        self.misterLauncherComboBox['values'] = util.misterLaunchers
+        self.misterLauncherComboBox.grid(column=3, row=row, sticky="W", padx=5, pady=2)
+        self.misterPackComponents.append(self.misterLauncherComboBox)
+
+        # Row 2: Use dosforge + DOS install profile
+        row = 2
+        label = Tk.Label(self.misterPackFrame, text=self.guiStrings['misterUseDosforge'].label)
+        wckToolTips.register(label, self.guiStrings['misterUseDosforge'].help)
+        label.grid(column=0, row=row, sticky="W", pady=2)
+        self.misterPackComponents.append(label)
+        self.guiVars['misterUseDosforge'] = Tk.StringVar()
+        useDfVal = self.__confGet__('misterUseDosforge', 'auto')
+        if useDfVal not in util.misterUseDosforgeChoices:
+            useDfVal = 'auto'
+        self.guiVars['misterUseDosforge'].set(useDfVal)
+        self.misterUseDosforgeComboBox = ttk.Combobox(
+            self.misterPackFrame, state="readonly", textvariable=self.guiVars['misterUseDosforge'], width=14
+        )
+        self.misterUseDosforgeComboBox['values'] = util.misterUseDosforgeChoices
+        self.misterUseDosforgeComboBox.grid(column=1, row=row, sticky="W", padx=5, pady=2)
+        self.misterPackComponents.append(self.misterUseDosforgeComboBox)
+
+        label = Tk.Label(self.misterPackFrame, text=self.guiStrings['misterDosInstallProfile'].label)
+        wckToolTips.register(label, self.guiStrings['misterDosInstallProfile'].help)
+        label.grid(column=2, row=row, sticky="W", padx=(10, 0), pady=2)
+        self.misterPackComponents.append(label)
+        self.guiVars['misterDosInstallProfile'] = Tk.StringVar()
+        profileVal = self.__confGet__('misterDosInstallProfile', 'full')
+        if profileVal not in util.misterDosInstallProfiles:
+            profileVal = 'full'
+        self.guiVars['misterDosInstallProfile'].set(profileVal)
+        self.misterDosInstallProfileComboBox = ttk.Combobox(
+            self.misterPackFrame, state="readonly", textvariable=self.guiVars['misterDosInstallProfile'], width=8
+        )
+        self.misterDosInstallProfileComboBox['values'] = util.misterDosInstallProfiles
+        self.misterDosInstallProfileComboBox.grid(column=3, row=row, sticky="W", padx=5, pady=2)
+        self.misterPackComponents.append(self.misterDosInstallProfileComboBox)
+
+        # Row 3: Save buffer + checkboxes
+        row = 3
+        label = Tk.Label(self.misterPackFrame, text=self.guiStrings['misterSaveBufferMiB'].label)
+        wckToolTips.register(label, self.guiStrings['misterSaveBufferMiB'].help)
+        label.grid(column=0, row=row, sticky="W", pady=2)
+        self.misterPackComponents.append(label)
+        self.guiVars['misterSaveBufferMiB'] = Tk.StringVar()
+        self.guiVars['misterSaveBufferMiB'].set(self.__confGet__('misterSaveBufferMiB', '64'))
+        self.misterSaveBufferMiBEntry = Tk.Entry(
+            self.misterPackFrame, textvariable=self.guiVars['misterSaveBufferMiB'], width=8
+        )
+        self.misterSaveBufferMiBEntry.grid(column=1, row=row, sticky="W", padx=5, pady=2)
+        self.misterPackComponents.append(self.misterSaveBufferMiBEntry)
+
+        checkFrame = Tk.Frame(self.misterPackFrame)
+        checkFrame.grid(column=2, row=row, columnspan=2, sticky="W", padx=5, pady=2)
+
+        genReadme = self.__confGet__('misterGenerateReadmeAns', 'true').lower()
+        self.guiVars['misterGenerateReadmeAns'] = Tk.IntVar()
+        self.guiVars['misterGenerateReadmeAns'].set(1 if genReadme in ('1', 'true', 'yes', 'on') else 0)
+        self.misterGenerateReadmeAnsCheckButton = Tk.Checkbutton(
+            checkFrame,
+            text=self.guiStrings['misterGenerateReadmeAns'].label,
+            variable=self.guiVars['misterGenerateReadmeAns'],
+            onvalue=1,
+            offvalue=0,
+        )
+        wckToolTips.register(self.misterGenerateReadmeAnsCheckButton, self.guiStrings['misterGenerateReadmeAns'].help)
+        self.misterGenerateReadmeAnsCheckButton.grid(column=0, row=0, sticky="W")
+        self.misterPackComponents.append(self.misterGenerateReadmeAnsCheckButton)
+
+        includeQemm = self.__confGet__('misterIncludeQemm', 'true').lower()
+        self.guiVars['misterIncludeQemm'] = Tk.IntVar()
+        self.guiVars['misterIncludeQemm'].set(1 if includeQemm in ('1', 'true', 'yes', 'on') else 0)
+        self.misterIncludeQemmCheckButton = Tk.Checkbutton(
+            checkFrame,
+            text=self.guiStrings['misterIncludeQemm'].label,
+            variable=self.guiVars['misterIncludeQemm'],
+            onvalue=1,
+            offvalue=0,
+        )
+        wckToolTips.register(self.misterIncludeQemmCheckButton, self.guiStrings['misterIncludeQemm'].help)
+        self.misterIncludeQemmCheckButton.grid(column=1, row=0, sticky="W", padx=10)
+        self.misterPackComponents.append(self.misterIncludeQemmCheckButton)
+
+        # Row 4: dosassets path
+        row = 4
+        label = Tk.Label(self.misterPackFrame, text=self.guiStrings['misterDosforgeBootAssets'].label)
+        wckToolTips.register(label, self.guiStrings['misterDosforgeBootAssets'].help)
+        label.grid(column=0, row=row, sticky="W", pady=2)
+        self.misterPackComponents.append(label)
+        self.guiVars['misterDosforgeBootAssets'] = Tk.StringVar()
+        self.guiVars['misterDosforgeBootAssets'].set(self.__confGet__('misterDosforgeBootAssets', ''))
+        self.misterDosforgeBootAssetsEntry = Tk.Entry(
+            self.misterPackFrame, textvariable=self.guiVars['misterDosforgeBootAssets'], width=48
+        )
+        self.misterDosforgeBootAssetsEntry.grid(column=1, row=row, columnspan=2, sticky="EW", padx=5, pady=2)
+        self.misterPackComponents.append(self.misterDosforgeBootAssetsEntry)
+        self.selectMisterDosforgeBootAssetsButton = Tk.Button(
+            self.misterPackFrame,
+            text=self.guiStrings['selectMisterDosforgeBootAssets'].label,
+            command=lambda: self.__openFileExplorer__(True, 'misterDosforgeBootAssets', None),
+        )
+        wckToolTips.register(
+            self.selectMisterDosforgeBootAssetsButton, self.guiStrings['selectMisterDosforgeBootAssets'].help
+        )
+        self.selectMisterDosforgeBootAssetsButton.grid(column=3, row=row, sticky="W", padx=5, pady=2)
+        self.misterPackComponents.append(self.selectMisterDosforgeBootAssetsButton)
+
+        # Row 5: dosforge binary
+        row = 5
+        label = Tk.Label(self.misterPackFrame, text=self.guiStrings['misterDosforgeExecutable'].label)
+        wckToolTips.register(label, self.guiStrings['misterDosforgeExecutable'].help)
+        label.grid(column=0, row=row, sticky="W", pady=2)
+        self.misterPackComponents.append(label)
+        self.guiVars['misterDosforgeExecutable'] = Tk.StringVar()
+        self.guiVars['misterDosforgeExecutable'].set(self.__confGet__('misterDosforgeExecutable', ''))
+        self.misterDosforgeExecutableEntry = Tk.Entry(
+            self.misterPackFrame, textvariable=self.guiVars['misterDosforgeExecutable'], width=48
+        )
+        self.misterDosforgeExecutableEntry.grid(column=1, row=row, columnspan=2, sticky="EW", padx=5, pady=2)
+        self.misterPackComponents.append(self.misterDosforgeExecutableEntry)
+        self.selectMisterDosforgeExecutableButton = Tk.Button(
+            self.misterPackFrame,
+            text=self.guiStrings['selectMisterDosforgeExecutable'].label,
+            command=lambda: self.__openFileExplorer__(False, 'misterDosforgeExecutable', '*'),
+        )
+        wckToolTips.register(
+            self.selectMisterDosforgeExecutableButton, self.guiStrings['selectMisterDosforgeExecutable'].help
+        )
+        self.selectMisterDosforgeExecutableButton.grid(column=3, row=row, sticky="W", padx=5, pady=2)
+        self.misterPackComponents.append(self.selectMisterDosforgeExecutableButton)
+
+        # Internal: prefer GUS follows audio when saving (also persisted if present)
+        preferGus = self.__confGet__('misterPreferGus', 'false').lower()
+        if preferGus not in ('true', 'false'):
+            preferGus = 'true' if audioVal == 'gus' else 'false'
+        self.guiVars['misterPreferGus'] = Tk.StringVar()
+        self.guiVars['misterPreferGus'].set(preferGus)
 
     # Listener for Expert Mode Check
     def __checkExpertMode__(self):
@@ -756,10 +989,20 @@ class ExoGUI:
         confFile = open(os.path.join(self.scriptDir, util.confDir, util.getConfFilename(self.setKey)), "w",
                         encoding="utf-8")
         listKeys = sorted(self.guiStrings.values(), key=attrgetter('order'))
+        skipIds = [
+            'verify', 'save', 'proceed', 'confirm', 'left', 'right', 'leftList', 'rightList',
+            'filter', 'selectall', 'unselectall', 'loadCustom', 'saveCustom', 'selectOutputDir',
+            'selectCollectionDir', 'selectSelectionPath', 'selectMisterDosforgeBootAssets',
+            'selectMisterDosforgeExecutable', 'misterPackSettings', 'converterSettings',
+            'dosboxBasicSettings', 'dosboxExpertSettings',
+        ]
+        # Keep prefer-GUS aligned with audio when saving
+        if 'misterAudio' in self.guiVars and 'misterPreferGus' in self.guiVars:
+            self.guiVars['misterPreferGus'].set(
+                'true' if self.guiVars['misterAudio'].get() == 'gus' else 'false'
+            )
         for key in listKeys:
-            if key.id not in ['verify', 'save', 'proceed', 'confirm', 'left', 'right', 'leftList', 'rightList',
-                              'filter', 'selectall', 'unselectall', 'loadCustom', 'saveCustom', 'selectOutputDir',
-                              'selectCollectionDir', 'selectSelectionPath']:
+            if key.id not in skipIds:
                 if key.help:
                     confFile.write('# ' + key.help.replace('\n', '\n# ') + '\n')
                 if key.id == 'images':
@@ -777,10 +1020,19 @@ class ExoGUI:
 
     def __saveConfInMem__(self):
         listKeys = sorted(self.guiStrings.values(), key=attrgetter('order'))
+        skipIds = [
+            'verify', 'save', 'proceed', 'confirm', 'left', 'right', 'leftList', 'rightList',
+            'selectall', 'unselectall', 'loadCustom', 'saveCustom', 'selectOutputDir',
+            'selectCollectionDir', 'selectSelectionPath', 'selectMisterDosforgeBootAssets',
+            'selectMisterDosforgeExecutable', 'misterPackSettings', 'converterSettings',
+            'dosboxBasicSettings', 'dosboxExpertSettings', 'filter',
+        ]
+        if 'misterAudio' in self.guiVars and 'misterPreferGus' in self.guiVars:
+            self.guiVars['misterPreferGus'].set(
+                'true' if self.guiVars['misterAudio'].get() == 'gus' else 'false'
+            )
         for key in listKeys:
-            if key.id not in ['verify', 'save', 'proceed', 'confirm', 'left', 'right', 'leftList', 'rightList',
-                              'selectall', 'unselectall', 'loadCustom', 'saveCustom', 'selectOutputDir',
-                              'selectCollectionDir', 'selectSelectionPath']:
+            if key.id not in skipIds:
                 if key.id == 'images':
                     imagesValue = self.guiVars[self.guiStrings['images'].label + ' #1'].get()
                     if self.guiStrings['images'].label + ' #2' in self.guiVars:
@@ -835,9 +1087,6 @@ class ExoGUI:
         conversionConf['outputCfg'] = self.guiVars['outputCfg'].get()
         conversionConf['vsyncCfg'] = True if self.guiVars['vsyncCfg'].get() == 1 else False
         conversionConf['preExtractGames'] = True if self.guiVars['preExtractGames'].get() == 1 else False
-        if conversionType == util.mister:
-            # MyMenu packaging always keeps game folders directly under /games.
-            conversionConf['preExtractGames'] = False
         if conversionType in [util.retrobat, util.batocera, util.recalbox]:
             useLongFolderNames = True if self.guiVars['longGameFolder'].get() == 1 else False
             conversionConf['dosboxPureZip'] = True if self.guiVars['dosboxPureZip'].get() == 1 else False
@@ -847,6 +1096,15 @@ class ExoGUI:
 
         conversionConf['downloadOnDemand'] = True if self.guiVars['downloadOnDemand'].get() == 1 else False
         conversionConf['mapper'] = self.guiVars['mapper'].get()
+
+        if conversionType == util.mister:
+            # Sync prefer-GUS from audio selection for pack builders
+            audio = self.guiVars.get('misterAudio')
+            if audio is not None:
+                self.guiVars['misterPreferGus'].set(
+                    'true' if audio.get() == 'gus' else 'false'
+                )
+            conversionConf.update(util.buildMisterPackConf(self.__misterConfValue__))
 
         selectedGameLabels = list(self.selectedGamesValues.get())
         games = [self.fullnameToGameDir.get(name) for name in selectedGameLabels]
@@ -913,6 +1171,27 @@ class ExoGUI:
         if component is not None:
             component['state'] = state
 
+    def __onMisterAudioChanged__(self, event=None):
+        """Keep prefer-GUS aligned with the Audio combobox."""
+        if 'misterAudio' in self.guiVars and 'misterPreferGus' in self.guiVars:
+            self.guiVars['misterPreferGus'].set(
+                'true' if self.guiVars['misterAudio'].get() == 'gus' else 'false'
+            )
+
+    def __misterConfValue__(self, key):
+        """Map GUI vars to strings for util.buildMisterPackConf."""
+        if key not in self.guiVars:
+            return ''
+        val = self.guiVars[key].get()
+        if key in ('misterGenerateReadmeAns', 'misterIncludeQemm'):
+            return 'true' if str(val) in ('1', 'true', 'True') else 'false'
+        if key == 'misterPreferGus':
+            audio = self.guiVars.get('misterAudio')
+            if audio is not None and audio.get() == 'gus':
+                return 'true'
+            return 'false' if str(val) in ('', '0', 'false', 'False') else str(val)
+        return str(val)
+
     # Handles state of all the components based on UI status
     def __handleComponentsState__(self, clickedProcess):
         collectionVersion = self.guiVars['collectionVersion'].get()
@@ -931,18 +1210,20 @@ class ExoGUI:
                            self.filterEntry,
                            self.expertModeCheckButton,
                            self.conversionTypeComboBox, self.useGenreSubFolderCheckButton]
+        misterPackComponents = list(self.misterPackComponents) if self.misterPackComponents else []
 
         if clickedProcess or collectionVersion == 'None':
             [self.__setComponentState__(c, 'disabled' if clickedProcess else 'normal') for c in entryComponents]
             [self.__setComponentState__(c, 'disabled') for c in mainButtons + exoConversionComponents
-             + dosboxBasicComponents + dosboxExpertComponents + otherComponents]
+             + dosboxBasicComponents + dosboxExpertComponents + otherComponents + misterPackComponents]
         else:
+            isMister = self.guiVars['conversionType'].get() == util.mister
             if collectionVersion in [util.EXODOS, util.EXOWIN3X]:
-                [self.__setComponentState__(c, 'disabled' if self.guiVars['expertMode'].get() != 1 or self.guiVars['conversionType'].get() == util.mister else 'normal')
+                [self.__setComponentState__(c, 'disabled' if self.guiVars['expertMode'].get() != 1 or isMister else 'normal')
                  for c in dosboxExpertComponents]
                 [self.__setComponentState__(c, 'normal') for c in mainButtons + otherComponents + entryComponents]
                 self.__setComponentState__(self.preExtractGamesCheckButton, 'disabled')
-                [self.__setComponentState__(c, 'disabled' if self.guiVars['conversionType'].get() == util.mister else 'normal') for c in
+                [self.__setComponentState__(c, 'disabled' if isMister else 'normal') for c in
                  dosboxBasicComponents + [self.expertModeCheckButton]]
                 self.__setComponentState__(self.downloadOnDemandCheckButton, 'normal')
                 self.__setComponentState__(self.dosboxPureZipGamesCheckButton,
@@ -958,6 +1239,27 @@ class ExoGUI:
             else:
                 [self.__setComponentState__(c, 'disabled') for c in exoConversionComponents + dosboxBasicComponents
                  + dosboxExpertComponents + [self.expertModeCheckButton]]
+
+            # MiSTer / native pack options: enabled only for MiSTer conversion type
+            misterEnabled = isMister and collectionVersion in [util.EXODOS, util.EXOWIN3X]
+            comboBoxes = {
+                self.misterBootModeComboBox,
+                self.misterAudioComboBox,
+                self.misterTargetComboBox,
+                self.misterLauncherComboBox,
+                self.misterUseDosforgeComboBox,
+                self.misterDosInstallProfileComboBox,
+            }
+            for c in misterPackComponents:
+                if c is None:
+                    continue
+                if isinstance(c, Tk.Label):
+                    self.__setComponentState__(c, 'normal' if misterEnabled else 'disabled')
+                elif c in comboBoxes:
+                    # Comboboxes use readonly (not normal) so values stay list-only
+                    self.__setComponentState__(c, 'readonly' if misterEnabled else 'disabled')
+                else:
+                    self.__setComponentState__(c, 'normal' if misterEnabled else 'disabled')
 
             # Handle Mapper values
             self.mapperValues = util.getMapperValues(self.guiVars['conversionType'].get()).copy()

@@ -24,7 +24,28 @@ class ExoAppState:
         'expertMode',
         'vsyncCfg',
     ]
-    PATH_KEYS = ['collectionDir', 'outputDir', 'selectionPath']
+    PATH_KEYS = [
+        'collectionDir',
+        'outputDir',
+        'selectionPath',
+        'misterDosforgeBootAssets',
+        'misterDosforgeExecutable',
+    ]
+    # MiSTer pack string defaults (also used when conf file lacks keys)
+    MISTER_DEFAULTS = {
+        'misterUseDosforge': 'auto',
+        'misterDosforgeExecutable': '',
+        'misterBootMode': 'auto',
+        'misterDosInstallProfile': 'full',
+        'misterDosforgeBootAssets': '',
+        'misterSaveBufferMiB': '64',
+        'misterGenerateReadmeAns': 'true',
+        'misterLauncher': 'mymenu',
+        'misterAudio': 'sb',
+        'misterTarget': 'mister',
+        'misterPreferGus': 'false',
+        'misterIncludeQemm': 'true',
+    }
     DEFAULTS = {
         'outputDir': '',
         'collectionDir': '',
@@ -46,6 +67,7 @@ class ExoAppState:
         'rendererCfg': 'auto',
         'outputCfg': 'texture',
         'vsyncCfg': '0',
+        **MISTER_DEFAULTS,
     }
 
     def __init__(self, scriptDir, logger, setKey='exo'):
@@ -201,6 +223,12 @@ class ExoAppState:
             'selectOutputDir',
             'selectCollectionDir',
             'selectSelectionPath',
+            'selectMisterDosforgeBootAssets',
+            'selectMisterDosforgeExecutable',
+            'misterPackSettings',
+            'converterSettings',
+            'dosboxBasicSettings',
+            'dosboxExpertSettings',
         ]
         sortedKeys = sorted(self.guiStrings.values(), key=lambda guiString: guiString.order)
 
@@ -269,19 +297,8 @@ class ExoAppState:
         conversionConf['mapper'] = self.getValue('mapper')
 
         if conversionType == util.mister:
-            conversionConf['preExtractGames'] = False
-            # dosforge VHD builder knobs (see dosforgevhd.py). Optional conf keys;
-            # missing values fall back to module defaults.
-            conversionConf['misterUseDosforge'] = self.getValue('misterUseDosforge') or 'auto'
-            conversionConf['misterDosforgeExecutable'] = self.getValue('misterDosforgeExecutable') or ''
-            conversionConf['misterBootMode'] = self.getValue('misterBootMode') or 'auto'
-            # full = C:\DOS tools + HIMEM (needed for DOSLFN/MyMenu on MiSTer)
-            conversionConf['misterDosInstallProfile'] = self.getValue('misterDosInstallProfile') or 'full'
-            conversionConf['misterDosforgeBootAssets'] = self.getValue('misterDosforgeBootAssets') or ''
-            conversionConf['misterSaveBufferMiB'] = self.getValue('misterSaveBufferMiB') or '64'
-            conversionConf['misterGenerateReadmeAns'] = self.getValue('misterGenerateReadmeAns') or 'true'
-            # mymenu (default): always boot MyMenu. none: single-game direct launch.
-            conversionConf['misterLauncher'] = self.getValue('misterLauncher') or 'mymenu'
+            # dosforge VHD builder knobs (see dosforgevhd.py / packcli).
+            conversionConf.update(util.buildMisterPackConf(self.getValue))
 
         if conversionType in [util.retrobat, util.batocera, util.recalbox]:
             useLongFolderNames = self.getBool('longGameFolder')

@@ -38,3 +38,18 @@ verify;Verify;Check that your paths are okay
 save;Save;Save your configuration to file
 proceed;Proceed;Create your set
 confirm;Confirm;Your output dir is {outputDir}#nIts content will be erased.#nIf you don't want to proceed, close this window, or click Cancel
+misterPackSettings;MiSTer / Native Pack Options;Pack options for MiSTer ao486 and native PC targets (PicoMEM / PicoGUS / PicoIDE). Enabled when Conversion Type is MiSTer.
+misterBootMode;DOS / boot mode;DOS version for the VHD: auto (MS-DOS 6.22, or MS-DOS 7.1 FAT32 if oversized) or any dosforge boot-mode
+misterAudio;Audio;AUTOEXEC sound: sb (Sound Blaster) or gus (Gravis UltraSound / PicoGUS)
+misterTarget;Hardware target;mister (imgtry CD) | picomem | picogus | picoide — drivers staged for all targets
+misterLauncher;Launcher;mymenu (boot MyMenu) or none (single-game direct launch)
+misterUseDosforge;Use dosforge;auto (use when available) | true (require) | false (legacy template VHD)
+misterDosInstallProfile;DOS install profile;full (C:\\DOS tools + HIMEM for DOSLFN/MyMenu) or minimal
+misterDosforgeBootAssets;dosassets path;Local path to dosassets root (folder containing msdos622/ and/or freedos/). Never auto-downloaded.
+selectMisterDosforgeBootAssets;Browse;Select your dosassets directory
+misterDosforgeExecutable;dosforge binary;Optional absolute path to dosforge executable (leave empty to use PATH)
+selectMisterDosforgeExecutable;Browse;Select the dosforge executable
+misterSaveBufferMiB;Save buffer (MiB);Extra free space reserved on the VHD for saves (default 64)
+misterIncludeQemm;Include QEMM;Stage QEMM for high memory on DOS versions without UMB (e.g. MS-DOS 3.x)
+misterGenerateReadmeAns;Generate README.ANS;Write per-game README.ANS files on the VHD
+misterPreferGus;Prefer GUS presets;Apply eXo GUS setup presets when audio is GUS (auto-set when Audio=gus)

@@ -49,7 +49,78 @@ mappersBatocera = ['None', 'mapper.map', 'padto.keys']  # retrobat too
 mappersDefault = ['None', 'mapper.map']  # default choice except MiSTeR
 mappersRecalbox = ['None', 'mapper.map', 'p2k']
 
+# MiSTer / native pack options (GUI + TUI + conversionConf)
+misterAudioModes = ['sb', 'gus']
+misterTargets = ['mister', 'picomem', 'picogus', 'picoide']
+misterLaunchers = ['mymenu', 'none']
+misterUseDosforgeChoices = ['auto', 'true', 'false']
+misterDosInstallProfiles = ['full', 'minimal']
+# Fallback if packcli is unavailable at import time
+_misterBootModesFallback = [
+    'auto', 'none', 'freedos', 'msdos71', 'ibm8088', 'msdos33', 'msdos331',
+    'msdos5', 'msdos6', 'msdos622', 'pcdos7', 'pcdos2000', 'pcdos71',
+    'compaq331', 'compaq2', 'pcdos3', 'pcdos5', 'compaq3', 'drdos6', 'drdos7', '4dos',
+]
+
 theEyeUrl = 'https://the-eye.eu/public/Games/eXo/eXoDOS_v6r2/eXo/eXoDOS/'
+
+
+def getMisterBootModes():
+    """DOS / boot-mode choices for pack builds (includes auto)."""
+    try:
+        from packcli.boot_rules import ALL_BOOT_MODES
+        return list(ALL_BOOT_MODES)
+    except Exception:
+        return list(_misterBootModesFallback)
+
+
+def _truthy_str(value, default=True):
+    """Normalize UI/conf flags to 'true'/'false' strings."""
+    raw = str(value if value is not None else '').strip().lower()
+    if raw in ('',):
+        return 'true' if default else 'false'
+    if raw in ('0', 'false', 'no', 'off'):
+        return 'false'
+    if raw in ('1', 'true', 'yes', 'on'):
+        return 'true'
+    return 'true' if default else 'false'
+
+
+def buildMisterPackConf(getValue):
+    """Build conversionConf keys for MiSTer / native VHD packs.
+
+    ``getValue(key)`` must return a string (empty string allowed). Used by
+    ExoAppState (TUI/CLI) and the Tk GUI proceed path.
+    """
+    conf = dict()
+    conf['preExtractGames'] = False
+    conf['misterUseDosforge'] = (getValue('misterUseDosforge') or 'auto').strip() or 'auto'
+    conf['misterDosforgeExecutable'] = (getValue('misterDosforgeExecutable') or '').strip()
+    conf['misterBootMode'] = (getValue('misterBootMode') or 'auto').strip() or 'auto'
+    conf['misterDosInstallProfile'] = (getValue('misterDosInstallProfile') or 'full').strip() or 'full'
+    conf['misterDosforgeBootAssets'] = (getValue('misterDosforgeBootAssets') or '').strip()
+    conf['misterSaveBufferMiB'] = (getValue('misterSaveBufferMiB') or '64').strip() or '64'
+    conf['misterGenerateReadmeAns'] = _truthy_str(getValue('misterGenerateReadmeAns'), default=True)
+    conf['misterLauncher'] = (getValue('misterLauncher') or 'mymenu').strip() or 'mymenu'
+    conf['misterIncludeQemm'] = _truthy_str(getValue('misterIncludeQemm'), default=True)
+    conf['misterTarget'] = (getValue('misterTarget') or 'mister').strip().lower() or 'mister'
+    if conf['misterTarget'] not in misterTargets:
+        conf['misterTarget'] = 'mister'
+
+    audio = (getValue('misterAudio') or 'sb').strip().lower() or 'sb'
+    if audio not in misterAudioModes:
+        audio = 'sb'
+    conf['misterAudio'] = audio
+
+    preferGus = (getValue('misterPreferGus') or '').strip().lower()
+    if preferGus not in ('true', 'false', '1', '0', 'yes', 'no', 'on', 'off'):
+        preferGus = 'true' if audio == 'gus' else 'false'
+    elif preferGus in ('1', 'yes', 'on'):
+        preferGus = 'true'
+    elif preferGus in ('0', 'no', 'off'):
+        preferGus = 'false'
+    conf['misterPreferGus'] = preferGus
+    return conf
 
 
 def getMapperValues(conversionType):

@@ -127,6 +127,50 @@ class ExoTUI(App):
         'vsync_switch': 'vsyncCfg',
     }
 
+    # Textual Switch ids that store true/false strings (not 0/1 BOOL_KEYS)
+    MISTER_TRUTHY_SWITCHES = {
+        'mister_include_qemm_switch': 'misterIncludeQemm',
+        'mister_generate_readme_switch': 'misterGenerateReadmeAns',
+    }
+
+    SELECT_TO_KEY = {
+        'conversion_type_select': 'conversionType',
+        'mapper_select': 'mapper',
+        'mister_boot_mode_select': 'misterBootMode',
+        'mister_audio_select': 'misterAudio',
+        'mister_target_select': 'misterTarget',
+        'mister_launcher_select': 'misterLauncher',
+        'mister_use_dosforge_select': 'misterUseDosforge',
+        'mister_dos_profile_select': 'misterDosInstallProfile',
+    }
+
+    INPUT_TO_KEY = {
+        'collection_dir_input': 'collectionDir',
+        'output_dir_input': 'outputDir',
+        'selection_path_input': 'selectionPath',
+        'mount_prefix_input': 'mountPrefix',
+        'fullresolution_input': 'fullresolutionCfg',
+        'renderer_input': 'rendererCfg',
+        'output_cfg_input': 'outputCfg',
+        'mister_dosassets_input': 'misterDosforgeBootAssets',
+        'mister_dosforge_exe_input': 'misterDosforgeExecutable',
+        'mister_save_buffer_input': 'misterSaveBufferMiB',
+    }
+
+    MISTER_WIDGET_IDS = [
+        '#mister_boot_mode_select',
+        '#mister_audio_select',
+        '#mister_target_select',
+        '#mister_launcher_select',
+        '#mister_use_dosforge_select',
+        '#mister_dos_profile_select',
+        '#mister_dosassets_input',
+        '#mister_dosforge_exe_input',
+        '#mister_save_buffer_input',
+        '#mister_include_qemm_switch',
+        '#mister_generate_readme_switch',
+    ]
+
     def __init__(self, scriptDir, logger, title):
         super().__init__()
         self.scriptDir = scriptDir
@@ -208,6 +252,90 @@ class ExoTUI(App):
                 yield Label('output', classes='field-label')
                 yield Input(value=self.state.getValue('outputCfg'), id='output_cfg_input')
 
+                yield Static('MiSTer / Native pack', classes='section-title')
+                yield Label('DOS / boot mode', classes='field-label')
+                bootModes = util.getMisterBootModes()
+                bootMode = self.state.getValue('misterBootMode') or 'auto'
+                if bootMode not in bootModes:
+                    bootMode = 'auto'
+                yield Select(
+                    [(mode, mode) for mode in bootModes],
+                    value=bootMode,
+                    id='mister_boot_mode_select',
+                )
+                yield Label('Audio (sb | gus)', classes='field-label')
+                audio = self.state.getValue('misterAudio') or 'sb'
+                if audio not in util.misterAudioModes:
+                    audio = 'sb'
+                yield Select(
+                    [(a, a) for a in util.misterAudioModes],
+                    value=audio,
+                    id='mister_audio_select',
+                )
+                yield Label('Hardware target', classes='field-label')
+                target = self.state.getValue('misterTarget') or 'mister'
+                if target not in util.misterTargets:
+                    target = 'mister'
+                yield Select(
+                    [(t, t) for t in util.misterTargets],
+                    value=target,
+                    id='mister_target_select',
+                )
+                yield Label('Launcher', classes='field-label')
+                launcher = self.state.getValue('misterLauncher') or 'mymenu'
+                if launcher not in util.misterLaunchers:
+                    launcher = 'mymenu'
+                yield Select(
+                    [(l, l) for l in util.misterLaunchers],
+                    value=launcher,
+                    id='mister_launcher_select',
+                )
+                yield Label('Use dosforge', classes='field-label')
+                useDf = self.state.getValue('misterUseDosforge') or 'auto'
+                if useDf not in util.misterUseDosforgeChoices:
+                    useDf = 'auto'
+                yield Select(
+                    [(c, c) for c in util.misterUseDosforgeChoices],
+                    value=useDf,
+                    id='mister_use_dosforge_select',
+                )
+                yield Label('DOS install profile', classes='field-label')
+                profile = self.state.getValue('misterDosInstallProfile') or 'full'
+                if profile not in util.misterDosInstallProfiles:
+                    profile = 'full'
+                yield Select(
+                    [(p, p) for p in util.misterDosInstallProfiles],
+                    value=profile,
+                    id='mister_dos_profile_select',
+                )
+                yield Label('dosassets path', classes='field-label')
+                yield Input(
+                    value=self.state.getValue('misterDosforgeBootAssets'),
+                    id='mister_dosassets_input',
+                    placeholder='~/Projects/dosforge/dosassets',
+                )
+                yield Label('dosforge binary (optional)', classes='field-label')
+                yield Input(
+                    value=self.state.getValue('misterDosforgeExecutable'),
+                    id='mister_dosforge_exe_input',
+                    placeholder='leave empty for PATH',
+                )
+                yield Label('Save buffer (MiB)', classes='field-label')
+                yield Input(
+                    value=self.state.getValue('misterSaveBufferMiB') or '64',
+                    id='mister_save_buffer_input',
+                )
+                yield Label('Include QEMM', classes='field-label')
+                yield Switch(
+                    value=self._misterTruthy(self.state.getValue('misterIncludeQemm'), True),
+                    id='mister_include_qemm_switch',
+                )
+                yield Label('Generate README.ANS', classes='field-label')
+                yield Switch(
+                    value=self._misterTruthy(self.state.getValue('misterGenerateReadmeAns'), True),
+                    id='mister_generate_readme_switch',
+                )
+
             with Horizontal(id='lists'):
                 with Vertical(id='available-pane'):
                     yield Static('Available games', classes='section-title')
@@ -241,6 +369,15 @@ class ExoTUI(App):
         self._disableForRun(True)
         thread = threading.Thread(target=self._refreshCollectionWorker, daemon=True)
         thread.start()
+
+    @staticmethod
+    def _misterTruthy(value, default=True):
+        raw = str(value or '').strip().lower()
+        if raw in ('0', 'false', 'no', 'off'):
+            return False
+        if raw in ('1', 'true', 'yes', 'on'):
+            return True
+        return default
 
     def _setStatus(self, statusText):
         self.query_one('#status_line', Static).update(statusText)
@@ -384,37 +521,48 @@ class ExoTUI(App):
             rendererInput.disabled = True
             outputCfgInput.disabled = True
 
+        # MiSTer / native pack options
+        misterDisabled = not (isExoCollection and isMister)
+        for widgetId in self.MISTER_WIDGET_IDS:
+            try:
+                widget = self.query_one(widgetId)
+                widget.disabled = misterDisabled
+            except Exception:
+                pass
+
     def on_input_changed(self, event: Input.Changed):
         inputId = event.input.id
         value = event.value
-        if inputId == 'collection_dir_input':
-            self.state.setValue('collectionDir', value)
-        elif inputId == 'output_dir_input':
-            self.state.setValue('outputDir', value)
-        elif inputId == 'selection_path_input':
-            self.state.setValue('selectionPath', value)
-        elif inputId == 'filter_input':
+        if inputId == 'filter_input':
             self.state.setFilter(value)
             self._refreshGameLists()
             return
-        elif inputId == 'mount_prefix_input':
-            self.state.setValue('mountPrefix', value)
-        elif inputId == 'fullresolution_input':
-            self.state.setValue('fullresolutionCfg', value)
-        elif inputId == 'renderer_input':
-            self.state.setValue('rendererCfg', value)
-        elif inputId == 'output_cfg_input':
-            self.state.setValue('outputCfg', value)
+        if inputId in self.INPUT_TO_KEY:
+            self.state.setValue(self.INPUT_TO_KEY[inputId], value)
 
     def on_select_changed(self, event: Select.Changed):
-        if event.select.id == 'conversion_type_select' and event.value is not Select.BLANK:
-            self.state.setValue('conversionType', event.value)
-            self._applyComponentStateRules()
-        elif event.select.id == 'mapper_select' and event.value is not Select.BLANK:
-            self.state.setValue('mapper', event.value)
+        selectId = event.select.id
+        if event.value is Select.BLANK:
+            return
+        if selectId in self.SELECT_TO_KEY:
+            self.state.setValue(self.SELECT_TO_KEY[selectId], event.value)
+            if selectId == 'conversion_type_select':
+                self._applyComponentStateRules()
+            elif selectId == 'mister_audio_select':
+                # Keep prefer-GUS in sync with audio for pack builders
+                self.state.setValue(
+                    'misterPreferGus',
+                    'true' if event.value == 'gus' else 'false',
+                )
 
     def on_switch_changed(self, event: Switch.Changed):
         switchId = event.switch.id
+        if switchId in self.MISTER_TRUTHY_SWITCHES:
+            self.state.setValue(
+                self.MISTER_TRUTHY_SWITCHES[switchId],
+                'true' if event.value else 'false',
+            )
+            return
         if switchId in self.SWITCH_TO_KEY:
             self.state.setBool(self.SWITCH_TO_KEY[switchId], event.value)
             if switchId == 'expert_mode_switch':
@@ -434,6 +582,9 @@ class ExoTUI(App):
             self.state.verifyPaths()
             self._setStatus('Verify complete')
         elif buttonId == 'save_conf_btn':
+            # Keep prefer-GUS aligned with audio before persist
+            audio = self.state.getValue('misterAudio') or 'sb'
+            self.state.setValue('misterPreferGus', 'true' if audio == 'gus' else 'false')
             self.state.saveConfFile()
             self._setStatus('Configuration saved')
         elif buttonId == 'proceed_btn':
